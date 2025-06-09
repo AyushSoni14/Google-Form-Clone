@@ -30,6 +30,16 @@ from PIL import Image
 import google.generativeai as genai
 from datetime import datetime
 
+# Decorator for admin access
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            flash('You do not have administrative access.', 'danger')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -98,6 +108,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
+    is_admin = db.Column(db.Boolean, default=False)
     forms = db.relationship('Form', backref='author', lazy=True)
 
     def set_password(self, password):
@@ -2155,6 +2166,7 @@ def form_embed_demo(form_id):
 
 @app.route('/form/<int:form_id>/toggle-status', methods=['POST'])
 @login_required
+@admin_required
 def toggle_form_status(form_id):
     form = Form.query.get_or_404(form_id)
     if form.user_id != current_user.id:
@@ -3528,6 +3540,115 @@ def oliver_ads():
 
     return jsonify({"status": "success", "updated_response_id": form_clone_id})
 
+@app.route('/admin/dashboard')
+@login_required
+@admin_required
+def admin_dashboard():
+    users = User.query.all()
+    forms = Form.query.all()
+    return render_template('admin_dashboard.html', users=users, forms=forms)
+
+@app.route('/admin/user/<int:user_id>/toggle-admin', methods=['POST'])
+@login_required
+@admin_required
+def toggle_admin_status(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        flash('You cannot change your own admin status.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    user.is_admin = not user.is_admin
+    db.session.commit()
+    flash(f'Admin status for {user.email} toggled successfully.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_user(user_id):
+    try:
+        user_to_delete = User.query.get_or_404(user_id)
+        
+        if user_to_delete.id == current_user.id:
+            flash('You cannot delete your own user account.', 'danger')
+            return redirect(url_for('admin_dashboard'))
+
+        # Delete associated forms and their related data (PDFs, postbacks)
+        for form in user_to_delete.forms:
+            # Delete associated PDF upload and file
+            if form.pdf_upload:
+                pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], form.pdf_upload.filename)
+                if os.path.exists(pdf_path):
+                    os.remove(pdf_path)
+                db.session.delete(form.pdf_upload)
+            
+            # Delete associated postback tracking and logs
+            postback_tracking = PostbackTracking.query.filter_by(form_id=form.id).first()
+            if postback_tracking:
+                # Delete associated PostbackLog entries
+                PostbackLog.query.filter_by(tracking_id=postback_tracking.tracking_id).delete()
+                db.session.delete(postback_tracking)
+
+            # Delete exported response files for this form
+            export_path = os.path.join('exports', 'survey_responses')
+            if os.path.exists(export_path):
+                for file in os.listdir(export_path):
+                    if file.startswith(f'response_{form.id}_'):
+                        os.remove(os.path.join(export_path, file))
+
+            # Deleting the form itself will cascade to questions, responses, answers, subquestions, geolocation
+            db.session.delete(form)
+            db.session.commit() # Commit form deletion before user deletion, to ensure relationships are cleared
+
+        db.session.delete(user_to_delete)
+        db.session.commit()
+        
+        flash(f'User {user_to_delete.email} and all their data deleted successfully.', 'success')
+        return redirect(url_for('admin_dashboard'))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting user: {str(e)}', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/impersonate/<int:user_id>', methods=['POST'])
+@login_required
+@admin_required
+def impersonate_user(user_id):
+    target_user = User.query.get_or_404(user_id)
+    
+    if target_user.is_admin:
+        flash('Cannot impersonate another admin.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    # Store the original admin's ID in the session
+    session['original_admin_id'] = current_user.id
+    
+    logout_user()
+    login_user(target_user)
+    flash(f'Successfully impersonating {target_user.email}.', 'info')
+    return redirect(url_for('dashboard'))
+
+@app.route('/admin/end_impersonation', methods=['POST'])
+@login_required
+def end_impersonation():
+    original_admin_id = session.pop('original_admin_id', None)
+    
+    if not original_admin_id:
+        flash('Not currently impersonating.', 'warning')
+        return redirect(url_for('dashboard'))
+        
+    original_admin = User.query.get(original_admin_id)
+    
+    logout_user()
+    if original_admin:
+        login_user(original_admin)
+        flash('Impersonation ended. Returned to admin session.', 'info')
+        return redirect(url_for('admin_dashboard'))
+    else:
+        flash('Original admin user not found. Please log in again.', 'danger')
+        return redirect(url_for('login'))
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
@@ -3535,4 +3656,25 @@ if __name__ == '__main__':
         FormTemplate.query.delete()
         db.session.commit()
         initialize_templates()  # Add this line to initialize templates
+
+        # Ensure all existing users have a non-null is_admin value and set default admin
+        for user in User.query.all():
+            if user.is_admin is None:
+                user.is_admin = False
+        db.session.commit()
+
+        # Create default admin user if none exists with email 'admin@gmail.com'
+        admin_user = User.query.filter_by(email='admin@gmail.com').first()
+        if not admin_user:
+            admin_user = User(email='admin@gmail.com', is_admin=True)
+            admin_user.set_password('admin')
+            db.session.add(admin_user)
+            db.session.commit()
+            print("Default admin user created: admin@gmail.com/admin")
+        elif not admin_user.is_admin:
+            # If 'admin' user exists but isn't admin, make them admin
+            admin_user.is_admin = True
+            db.session.commit()
+            print("Existing 'admin@gmail.com' user set to admin.")
+
     app.run(debug=True)

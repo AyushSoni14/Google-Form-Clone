@@ -1,0 +1,107 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <h1 class="mb-4">Dashboard Overview</h1>
+
+    {# The tab navigation is now handled by the sidebar in admin_base.html #}
+    {# The content for the tabs remains here #}
+
+    <div class="tab-content" id="adminTabsContent">
+        <div class="tab-pane fade show active" id="users" role="tabpanel" aria-labelledby="users-tab">
+            <h2>All Users</h2>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Email</th>
+                            <th>Admin</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.id }}</td>
+                            <td>{{ user.email }}</td>
+                            <td>
+                                {% if user.is_admin %}
+                                <span class="badge bg-success">Yes</span>
+                                {% else %}
+                                <span class="badge bg-secondary">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form action="{{ url_for('toggle_admin_status', user_id=user.id) }}" method="post" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm {% if user.is_admin %}btn-outline-danger{% else %}btn-outline-success{% endif %}" {% if user.id == current_user.id %}disabled{% endif %}>
+                                        {% if user.is_admin %}Revoke Admin{% else %}Make Admin{% endif %}
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete user {{ user.email }} and all their forms?');">
+                                    <input type="hidden" name="_method" value="DELETE">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" {% if user.id == current_user.id %}disabled{% endif %}>Delete User</button>
+                                </form>
+                                {% if not user.is_admin %}
+                                <form action="{{ url_for('impersonate_user', user_id=user.id) }}" method="post" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-info" {% if user.id == current_user.id %}disabled{% endif %}>Impersonate</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="forms" role="tabpanel" aria-labelledby="forms-tab">
+            <h2>All Forms</h2>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Author</th>
+                            <th>Created At</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for form in forms %}
+                        <tr>
+                            <td>{{ form.id }}</td>
+                            <td><a href="{{ url_for('view_form', form_id=form.id) }}">{{ form.title }}</a></td>
+                            <td>{{ form.author.email }}</td>
+                            <td>{{ form.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                {% if form.is_closed %}
+                                <span class="badge bg-danger">Closed</span>
+                                {% else %}
+                                <span class="badge bg-success">Open</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form action="{{ url_for('toggle_form_status', form_id=form.id) }}" method="post" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm {% if form.is_closed %}btn-outline-success{% else %}btn-outline-warning{% endif %}">
+                                        {% if form.is_closed %}Reopen{% else %}Close{% endif %}
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('delete_form', form_id=form.id) }}" method="post" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this form and all its responses?');">
+                                    <input type="hidden" name="_method" value="DELETE">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

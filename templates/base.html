@@ -22,15 +22,24 @@
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
                         </li>
+                        {% if current_user.is_admin %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Admin Panel</a>
+                        </li>
+                        {% endif %}
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('create_form') }}">Create Form</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
                         </li>
+                        {% if session.get('original_admin_id') %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('postback_dashboard') }}">Postbacks</a>
+                            <form action="{{ url_for('end_impersonation') }}" method="post" class="d-inline">
+                                <button type="submit" class="nav-link btn btn-link">End Impersonation</button>
+                            </form>
                         </li>
+                        {% endif %}
                     {% else %}
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('login') }}">Login</a>
