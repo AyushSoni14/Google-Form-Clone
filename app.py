@@ -3491,7 +3491,7 @@ def send_to_surveytitans():
         if not all([formId, userId, companyName]):
             return jsonify({'status': 'error', 'message': 'Missing fields'}), 400
         payout = Form.query.get(formId).score
-        target_url = f"https://surveytitans.com/spb/325455fec74bf41ae1db1cb05b3a7f9d?username=Ayush&payout={payout/100:.2f}"
+        target_url = f"https://surveytitans.com/spb/325455fec74bf41ae1db1cb05b3a7f9d?username={userId}&payout={payout/100:.2f}"
         payload = {
             "formId": formId,
             "userId": userId,
@@ -3556,7 +3556,7 @@ def merge_form(form_id):
     }
 
     try:
-        response = requests.post("http://127.0.0.1:5001/save_merge_data", json=payload)
+        response = requests.post("https://olive-ads.onrender.com/save_merge_data", json=payload)
         response.raise_for_status()
         flash(f"Form {form_id} successfully merged and data sent.", "success")
     except requests.exceptions.RequestException as e:
