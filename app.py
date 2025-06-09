@@ -42,49 +42,12 @@ def admin_required(f):
 
 # Load environment variables from .env file
 load_dotenv()
-def initialize_app():
-    db.create_all()
-    with app.app_context():
-        db.create_all()
 
-        # Clear and recreate form templates
-        FormTemplate.query.delete()
-        db.session.commit()
-        initialize_templates()
-
-        # Ensure all users have is_admin
-        for user in User.query.all():
-            if user.is_admin is None:
-                user.is_admin = False
-        db.session.commit()
-
-        # Create default admin user
-        admin_user = User.query.filter_by(email='admin@gmail.com').first()
-        if not admin_user:
-            admin_user = User(email='admin@gmail.com', is_admin=True)
-            admin_user.set_password('admin')
-            db.session.add(admin_user)
-            db.session.commit()
-            print("Default admin user created: admin@gmail.com/admin")
-        elif not admin_user.is_admin:
-            admin_user.is_admin = True
-            db.session.commit()
-            print("Existing 'admin@gmail.com' user set to admin.")
 
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = os.urandom(24)
-if os.getenv("WEBSITE_HOSTNAME"):
-    db_path = '/home/site/wwwroot/instance/forms.db'  # Safe writable path on Azure
-else:
-    db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'instance/forms.db')
-
-# Ensure instance directory exists
-os.makedirs(os.path.dirname(db_path), exist_ok=True)
-
-# Configure SQLAlchemy with correct path
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -127,7 +90,6 @@ migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
-initialize_app()
 def fromjson_filter(s):
     try:
         return json.loads(s)
