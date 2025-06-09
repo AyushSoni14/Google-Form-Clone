@@ -43,6 +43,7 @@ def admin_required(f):
 # Load environment variables from .env file
 load_dotenv()
 def initialize_app():
+    db.create_all()
     with app.app_context():
         db.create_all()
 
