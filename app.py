@@ -29,7 +29,7 @@ import base64
 from PIL import Image
 import google.generativeai as genai
 from datetime import datetime
-
+import re
 # Decorator for admin access
 def admin_required(f):
     @wraps(f)
