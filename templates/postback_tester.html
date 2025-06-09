@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Postback URL Tester - Google Forms Clone{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="text-center py-4">
+            <h1 class="display-4 mb-4">Postback URL Tester</h1>
+            <p class="lead mb-4">Test your postback URLs with automated requests</p>
+        </div>
+        
+        <div class="card shadow">
+            <div class="card-body p-4">
+                <div class="mb-3">
+                    <label for="postbackUrl" class="form-label">Postback URL:</label>
+                    <input type="text" class="form-control" id="postbackUrl" placeholder="Enter Postback URL (with optional {username}, {payout})" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="interval" class="form-label">Interval (in seconds):</label>
+                    <input type="number" class="form-control" id="interval" placeholder="e.g., 3" min="1" />
+                </div>
+
+                <div id="placeholdersContainer" class="mb-3"></div>
+
+                <div class="text-center mb-4">
+                    <button id="generateInputsBtn" class="btn btn-secondary me-3">Generate Inputs</button>
+                    <button id="startBtn" class="btn btn-primary me-3" disabled>Start Testing</button>
+                    <button id="stopBtn" class="btn btn-danger" disabled>Stop Testing</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Test Log</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="log" style="height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9em; background-color: #f8f9fa; padding: 15px; border-radius: 5px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-outline-primary">Back to Home</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    let intervalId = null;
+    let placeholderKeys = [];
+
+    function logMessage(message, isError = false) {
+        const logDiv = document.getElementById('log');
+        const p = document.createElement('p');
+        p.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+        p.className = isError ? 'text-danger mb-1' : 'text-success mb-1';
+        p.style.margin = '2px 0';
+        logDiv.appendChild(p);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function parsePlaceholders(url) {
+        const regex = /{(\w+)}/g;
+        let match;
+        const keys = new Set();
+        while ((match = regex.exec(url)) !== null) {
+            keys.add(match[1]);
+        }
+        return Array.from(keys);
+    }
+
+    function renderPlaceholderInputs(keys) {
+        const container = document.getElementById('placeholdersContainer');
+        container.innerHTML = '';
+        keys.forEach(key => {
+            const div = document.createElement('div');
+            div.className = 'mb-2';
+            div.innerHTML = `
+                <label class="form-label">Value for ${key}:</label>
+                <input type="text" class="form-control" id="input-${key}" placeholder="Enter ${key}" />
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function substitutePlaceholders(url, keys) {
+        keys.forEach(key => {
+            const value = document.getElementById(`input-${key}`).value.trim();
+            url = url.replaceAll(`{${key}}`, encodeURIComponent(value));
+        });
+        return url;
+    }
+
+    async function triggerPostback(postbackUrl) {
+        try {
+            const response = await fetch('/proxy_postback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: postbackUrl })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.error) {
+                    logMessage(`Error from proxy: ${data.error}`, true);
+                } else {
+                    logMessage(`Success: HTTP ${data.status_code} - Response: ${data.response_text}`);
+                }
+            } else {
+                logMessage(`Failed proxy request: HTTP ${response.status}`, true);
+            }
+        } catch (error) {
+            logMessage(`Error: ${error.message}`, true);
+        }
+    }
+
+    document.getElementById('generateInputsBtn').addEventListener('click', () => {
+        const url = document.getElementById('postbackUrl').value.trim();
+        if (!url) {
+            alert('Please enter a Postback URL.');
+            return;
+        }
+
+        placeholderKeys = parsePlaceholders(url);
+        renderPlaceholderInputs(placeholderKeys);
+
+        document.getElementById('startBtn').disabled = false;
+        logMessage(`Found placeholders: ${placeholderKeys.join(', ') || 'none'}`);
+    });
+
+    document.getElementById('startBtn').addEventListener('click', () => {
+        const rawUrl = document.getElementById('postbackUrl').value.trim();
+        const intervalSeconds = parseInt(document.getElementById('interval').value);
+
+        if (!rawUrl || isNaN(intervalSeconds) || intervalSeconds < 1) {
+            alert('Please enter a valid URL and interval.');
+            return;
+        }
+
+        const url = substitutePlaceholders(rawUrl, placeholderKeys);
+
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        document.getElementById('startBtn').textContent = 'Running...';
+        document.getElementById('log').innerHTML = '';
+        logMessage('Starting postback testing...');
+
+        triggerPostback(url);
+        intervalId = setInterval(() => {
+            const refreshedUrl = substitutePlaceholders(rawUrl, placeholderKeys);
+            triggerPostback(refreshedUrl);
+        }, intervalSeconds * 1000);
+    });
+
+    document.getElementById('stopBtn').addEventListener('click', () => {
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('startBtn').textContent = 'Start Testing';
+        logMessage('Stopped triggering postback.');
+    });
+</script>
+{% endblock %}
