@@ -905,12 +905,24 @@ def submit_form(form_id):
     # redirect_url = form.merged_url if form.merged_url else url_for('form_submitted', form_id=form_id, response_id=response.id)
     # return redirect(redirect_url)
     from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+    # if form.merged_url:
+    #    parsed_url = urlparse(form.merged_url)
+    #    query_params = parse_qs(parsed_url.query)
+    #    query_params['formClone_RespondeId'] = [str(response.id)]
+    #    new_query = urlencode(query_params, doseq=True)
+    #    redirect_url = urlunparse(parsed_url._replace(query=new_query))
+    # else:
+    #   redirect_url = url_for('form_submitted', form_id=form_id, response_id=response.id)
     if form.merged_url:
-       parsed_url = urlparse(form.merged_url)
-       query_params = parse_qs(parsed_url.query)
-       query_params['formClone_RespondeId'] = [str(response.id)]
-       new_query = urlencode(query_params, doseq=True)
-       redirect_url = urlunparse(parsed_url._replace(query=new_query))
+      parsed_url = urlparse(form.merged_url)
+      query_params = parse_qs(parsed_url.query)
+
+      query_params['formClone_RespondeId'] = [str(response.id)]
+    #   query_params['who_merged'] = [str(current_user.id)]
+      query_params['userid'] = [user_id]
+      query_params['companyname'] = [company_name]
+      new_query = urlencode(query_params, doseq=True)
+      redirect_url = urlunparse(parsed_url._replace(query=new_query))
     else:
       redirect_url = url_for('form_submitted', form_id=form_id, response_id=response.id)
     return redirect(redirect_url)
@@ -3499,18 +3511,59 @@ def send_to_surveytitans():
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+# @app.route('/merge_form/<int:form_id>', methods=['POST'])
+# def merge_form(form_id):
+#     merge_url = request.form.get('merge_url')
+#     if not merge_url:
+#         flash("Please enter a URL to merge with.", "danger")
+#         return redirect(request.referrer)
+#     form = Form.query.get_or_404(form_id)
+#     form.merged_url = merge_url  # ✅ save to database
+#     db.session.commit()  
+#     flash(f"Form {form_id} successfully merged with Form {merge_url}.", "success")
+#     print(f"Merge URL for form {form_id}: {merge_url}")
+#     return redirect(request.referrer) 
 @app.route('/merge_form/<int:form_id>', methods=['POST'])
+@login_required
 def merge_form(form_id):
     merge_url = request.form.get('merge_url')
     if not merge_url:
         flash("Please enter a URL to merge with.", "danger")
         return redirect(request.referrer)
+
+    # Extract oliver_form_id from URL using regex
+    match = re.search(r'/surveys/(\d+)', merge_url)
+    if not match:
+        flash("Invalid merge URL format. Could not extract form ID.", "danger")
+        return redirect(request.referrer)
+
+    oliver_form_id = int(match.group(1))
+    
+    # Save to database
     form = Form.query.get_or_404(form_id)
-    form.merged_url = merge_url  # ✅ save to database
-    db.session.commit()  
-    flash(f"Form {form_id} successfully merged with Form {merge_url}.", "success")
+    form.merged_url = merge_url
+    db.session.commit()
+    
+    # Prepare data to send to remote server
+    print("🔎 current_user:", current_user)
+    print("🔎 current_user.id:", current_user.id)
+    print("🔎 current_user.email:", current_user.email)
+
+    payload = {
+        'username': current_user.id,  # or current_user.id
+        'oliver_form_id': oliver_form_id,
+        'email':current_user.email
+    }
+
+    try:
+        response = requests.post("http://127.0.0.1:5001/save_merge_data", json=payload)
+        response.raise_for_status()
+        flash(f"Form {form_id} successfully merged and data sent.", "success")
+    except requests.exceptions.RequestException as e:
+        flash(f"Form merged, but failed to notify remote server: {e}", "warning")
+
     print(f"Merge URL for form {form_id}: {merge_url}")
-    return redirect(request.referrer) 
+    return redirect(request.referrer)
 # @app.route('/oliver_ads', methods=['POST'])
 # def oliver_ads():
 #     data = request.get_json()
