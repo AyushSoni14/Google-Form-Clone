@@ -3648,7 +3648,28 @@ def end_impersonation():
     else:
         flash('Original admin user not found. Please log in again.', 'danger')
         return redirect(url_for('login'))
+@app.route('/postback_tester')
+def postback_tester():
+    return render_template('postback_tester.html')
+@app.route('/proxy_postback', methods=['POST'])
+def proxy_postback():
+    data = request.get_json()
+    url = data.get('url')
 
+    if not url:
+        return jsonify({'error': 'Missing URL'}), 400
+
+    try:
+        # Forward POST request to the target URL
+        resp = requests.post(url)
+
+        return jsonify({
+            'status_code': resp.status_code,
+            'response_text': resp.text
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
@@ -3677,4 +3698,5 @@ if __name__ == '__main__':
             db.session.commit()
             print("Existing 'admin@gmail.com' user set to admin.")
 
-    app.run(debug=True)
+    # app.run(debug=True)
+    app.run(host='0.0.0.0', port=8080)
