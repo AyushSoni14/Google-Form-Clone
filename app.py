@@ -46,7 +46,17 @@ load_dotenv()
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = os.urandom(24)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
+if os.getenv("WEBSITE_HOSTNAME"):
+    db_path = '/home/site/wwwroot/instance/forms.db'  # Safe writable path on Azure
+else:
+    db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'instance/forms.db')
+
+# Ensure instance directory exists
+os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+# Configure SQLAlchemy with correct path
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
