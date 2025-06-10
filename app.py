@@ -3723,6 +3723,15 @@ def proxy_postback():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+from flask import request, render_template
+
+@app.route('/pepeleads')
+def show_transaction():
+    transaction_id = request.args.get('transaction_id')
+    if not transaction_id:
+        return "No transaction_id provided", 400
+    return render_template('show_transaction.html', transaction_id=transaction_id)
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
