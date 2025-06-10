@@ -87,6 +87,8 @@ def inject_csrf_token():
     return {'csrf_token': lambda: 'dummy_token'}
 
 db = SQLAlchemy(app)
+with app.app_context():
+    db.create_all()
 migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
