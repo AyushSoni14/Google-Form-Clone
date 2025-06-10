@@ -44,10 +44,11 @@ def admin_required(f):
 load_dotenv()
 
 
-app = Flask(__name__)
-
+# app = Flask(__name__)
+app = Flask(__name__, instance_relative_config=True)
 app.config['SECRET_KEY'] = os.urandom(24)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(app.instance_path, 'forms.db')
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
