@@ -3725,12 +3725,32 @@ def proxy_postback():
         return jsonify({'error': str(e)}), 500
 from flask import request, render_template
 
-@app.route('/pepeleads')
-def show_transaction():
-    transaction_id = request.args.get('transaction_id')
-    if not transaction_id:
-        return "No transaction_id provided", 400
-    return render_template('show_transaction.html', transaction_id=transaction_id)
+logs = []  # In-memory store, use DB if needed
+
+@app.route('/postback_data')
+def postback_data():
+    data = {
+        "offerid": request.args.get("offerid"),
+        "name": request.args.get("name"),
+        "rate": request.args.get("rate"),
+        "sub1": request.args.get("sub1"),
+        "status": request.args.get("status"),
+        "ip": request.args.get("ip"),
+    }
+    logs.append(data)
+    return jsonify({"status": "received", "data": data})
+
+@app.route('/logs')
+def show_logs():
+    html = """
+    <h2>Postback Logs</h2>
+    <ul>
+    {% for log in logs %}
+      <li>{{ log }}</li>
+    {% endfor %}
+    </ul>
+    """
+    return render_template_string(html, logs=logs)
 
 if __name__ == '__main__':
     with app.app_context():
