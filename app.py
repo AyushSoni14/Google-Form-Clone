@@ -3752,4 +3752,4 @@ if __name__ == '__main__':
             print("Existing 'admin@gmail.com' user set to admin.")
 
     # app.run(debug=True)
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host='0.0.0.0', port=5000)
