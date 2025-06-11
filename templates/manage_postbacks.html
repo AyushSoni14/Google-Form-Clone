@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Postbacks{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="row justify-content-center">
+        <div class="col-xl-10 col-lg-11">
+            <!-- Header Section -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-1 text-gray-800">Manage Postbacks</h1>
+                    <p class="text-muted mb-0">Configure URLs to receive form response data automatically</p>
+                </div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="{{ url_for('index') }}" class="text-decoration-none">Dashboard</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Postbacks</li>
+                    </ol>
+                </nav>
+            </div>
+
+            <div class="row">
+                <!-- Add Postback Form -->
+                <div class="col-lg-5 mb-4">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-gradient-primary text-white border-0">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-plus-circle me-2"></i>Add New Postback
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" class="needs-validation" novalidate>
+                                <div class="mb-4">
+                                    <label for="domain" class="form-label fw-semibold">
+                                        <i class="fas fa-link me-1 text-primary"></i>Postback URL
+                                    </label>
+                                    <input type="url" 
+                                           name="domain" 
+                                           id="domain" 
+                                           class="form-control form-control-lg" 
+                                           placeholder="https://example.com/webhook" 
+                                           required>
+                                    <div class="form-text">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Enter the base URL without query parameters
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        Please provide a valid URL.
+                                    </div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <label class="form-label fw-semibold mb-3">
+                                        <i class="fas fa-cogs me-1 text-primary"></i>Response Parameters
+                                    </label>
+                                    <div class="form-text mb-3">Select which data to include as query parameters:</div>
+                                    
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <div class="card bg-light border-0">
+                                                <div class="card-body py-3">
+                                                    <h6 class="card-subtitle mb-2 text-muted">
+                                                        <i class="fas fa-database me-1"></i>Core Data
+                                                    </h6>
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            {% for field, label in [
+                                                                ('form_id', 'Form ID'),
+                                                                ('id', 'Response ID'),
+                                                                ('submitted_at', 'Submission Time')
+                                                            ] %}
+                                                            <div class="form-check mb-2">
+                                                                <input class="form-check-input" type="checkbox" name="include_{{ field }}" id="include_{{ field }}">
+                                                                <label class="form-check-label small" for="include_{{ field }}">
+                                                                    {{ label }} <code class="text-muted">{{ field }}</code>
+                                                                </label>
+                                                            </div>
+                                                            {% endfor %}
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            {% for field, label in [
+                                                                ('user_id', 'User ID'),
+                                                                ('company_id', 'Company ID'),
+                                                                ('status', 'Status')
+                                                            ] %}
+                                                            <div class="form-check mb-2">
+                                                                <input class="form-check-input" type="checkbox" name="include_{{ field }}" id="include_{{ field }}">
+                                                                <label class="form-check-label small" for="include_{{ field }}">
+                                                                    {{ label }} <code class="text-muted">{{ field }}</code>
+                                                                </label>
+                                                            </div>
+                                                            {% endfor %}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-12">
+                                            <div class="card bg-light border-0">
+                                                <div class="card-body py-3">
+                                                    <h6 class="card-subtitle mb-2 text-muted">
+                                                        <i class="fas fa-chart-line me-1"></i>Tracking & Analytics
+                                                    </h6>
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            {% for field, label in [
+                                                                ('utm_source', 'UTM Source'),
+                                                                ('utm_medium', 'UTM Medium'),
+                                                                ('utm_campaign', 'UTM Campaign')
+                                                            ] %}
+                                                            <div class="form-check mb-2">
+                                                                <input class="form-check-input" type="checkbox" name="include_{{ field }}" id="include_{{ field }}">
+                                                                <label class="form-check-label small" for="include_{{ field }}">
+                                                                    {{ label }} <code class="text-muted">{{ field }}</code>
+                                                                </label>
+                                                            </div>
+                                                            {% endfor %}
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            {% for field, label in [
+                                                                ('utm_content', 'UTM Content'),
+                                                                ('utm_term', 'UTM Term'),
+                                                                ('device_type', 'Device Type')
+                                                            ] %}
+                                                            <div class="form-check mb-2">
+                                                                <input class="form-check-input" type="checkbox" name="include_{{ field }}" id="include_{{ field }}">
+                                                                <label class="form-check-label small" for="include_{{ field }}">
+                                                                    {{ label }} <code class="text-muted">{{ field }}</code>
+                                                                </label>
+                                                            </div>
+                                                            {% endfor %}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-plus me-2"></i>Add Postback
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Postbacks List -->
+                <div class="col-lg-7 mb-4">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-white border-bottom">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-list me-2 text-primary"></i>Active Postbacks
+                                </h5>
+                                {% if postbacks %}
+                                <span class="badge bg-primary rounded-pill">{{ postbacks|length }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            {% if postbacks %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="border-0 fw-semibold">Postback Details</th>
+                                                <th class="border-0 fw-semibold text-center" width="200">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for pb in postbacks %}
+                                            <tr>
+                                                <td class="py-3">
+                                                    <div class="d-flex flex-column">
+                                                        <div class="mb-1">
+                                                            <i class="fas fa-external-link-alt me-2 text-primary"></i>
+                                                            <strong class="text-dark">{{ pb.url }}</strong>
+                                                        </div>
+                                                        {% if pb.query_params %}
+                                                        <div class="small text-muted">
+                                                            <i class="fas fa-code me-1"></i>
+                                                            Parameters: <code class="bg-light px-2 py-1 rounded">?{{ pb.query_params }}</code>
+                                                        </div>
+                                                        {% else %}
+                                                        <div class="small text-muted">
+                                                            <i class="fas fa-info-circle me-1"></i>
+                                                            No query parameters configured
+                                                        </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </td>
+                                                <td class="text-center py-3">
+                                                    <div class="d-flex gap-2 justify-content-center">
+                                                        <a href="/postback_tester?postback_id={{ pb.id }}" 
+                                                           class="btn btn-success btn-sm px-3" 
+                                                           data-bs-toggle="tooltip" 
+                                                           title="Send a test request to verify this postback URL is working">
+                                                            <i class="fas fa-play me-1"></i>Test
+                                                        </a>
+                                                        <form method="POST" 
+                                                              action="{{ url_for('delete_postback', postback_id=pb.id) }}" 
+                                                              onsubmit="return confirm('Are you sure you want to permanently delete this postback URL?');" 
+                                                              class="d-inline">
+                                                            <button type="submit" 
+                                                                    class="btn btn-danger btn-sm px-3" 
+                                                                    data-bs-toggle="tooltip" 
+                                                                    title="Permanently remove this postback URL">
+                                                                <i class="fas fa-times me-1"></i>Delete
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="text-center py-5">
+                                    <div class="mb-3">
+                                        <i class="fas fa-inbox fa-3x text-muted"></i>
+                                    </div>
+                                    <h6 class="text-muted mb-2">No Postbacks Configured</h6>
+                                    <p class="text-muted small mb-0">Add your first postback URL to start receiving form response data automatically.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card border-0 bg-light">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h6 class="mb-2">
+                                        <i class="fas fa-question-circle me-2 text-info"></i>How Postbacks Work
+                                    </h6>
+                                    <p class="text-muted small mb-0">
+                                        When a form is submitted, we'll automatically send the selected data to your postback URLs as query parameters. 
+                                        This allows you to track conversions, update your CRM, or trigger other automated workflows.
+                                    </p>
+                                </div>
+                                <div class="col-md-4 text-md-end">
+                                    <a href="#" class="btn btn-outline-info btn-sm">
+                                        <i class="fas fa-book me-1"></i>View Documentation
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+}
+
+.form-check-input:checked {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.card {
+    transition: all 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+code {
+    font-size: 0.8em;
+}
+
+.btn-group .btn {
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-group .btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn-sm {
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 6px;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+    transform: translateY(-1px);
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+    transform: translateY(-1px);
+}
+
+.form-control:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+</style>
+
+<script>
+// Form validation
+(function() {
+    'use strict';
+    window.addEventListener('load', function() {
+        var forms = document.getElementsByClassName('needs-validation');
+        var validation = Array.prototype.filter.call(forms, function(form) {
+            form.addEventListener('submit', function(event) {
+                if (form.checkValidity() === false) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            }, false);
+        });
+    }, false);
+})();
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+{% endblock %}

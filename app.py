@@ -104,13 +104,18 @@ def datetime_filter(date):
 app.jinja_env.filters['datetime'] = datetime_filter
 
 # Models
+class Postback(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    url = db.Column(db.String(500), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
     is_admin = db.Column(db.Boolean, default=False)
     forms = db.relationship('Form', backref='author', lazy=True)
-
+    postbacks = db.relationship('Postback', backref='user', lazy=True, cascade='all, delete-orphan')
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -3703,7 +3708,16 @@ def end_impersonation():
         return redirect(url_for('login'))
 @app.route('/postback_tester')
 def postback_tester():
-    return render_template('postback_tester.html')
+    postback_id = request.args.get('postback_id', type=int)
+    postback_url = ""
+
+    if postback_id:
+        postback = Postback.query.get(postback_id)
+        if postback:
+            postback_url = postback.url  # Assumes your Postback model has a 'url' field
+            
+    return render_template('postback_tester.html', postback_url=postback_url)
+
 @app.route('/proxy_postback', methods=['POST'])
 def proxy_postback():
     data = request.get_json()
@@ -3725,32 +3739,71 @@ def proxy_postback():
         return jsonify({'error': str(e)}), 500
 from flask import request, render_template
 
-logs = []  # In-memory store, use DB if needed
+# logs = []  # In-memory store, use DB if needed
 
-@app.route('/postback_data')
-def postback_data():
-    data = {
-        "offerid": request.args.get("offerid"),
-        "name": request.args.get("name"),
-        "rate": request.args.get("rate"),
-        "sub1": request.args.get("sub1"),
-        "status": request.args.get("status"),
-        "ip": request.args.get("ip"),
-    }
-    logs.append(data)
-    return jsonify({"status": "received", "data": data})
+# @app.route('/postback_data')
+# def postback_data():
+#     data = {
+#         "offerid": request.args.get("offerid"),
+#         "name": request.args.get("name"),
+#         "rate": request.args.get("rate"),
+#         "sub1": request.args.get("sub1"),
+#         "status": request.args.get("status"),
+#         "ip": request.args.get("ip"),
+#     }
+#     logs.append(data)
+#     return jsonify({"status": "received", "data": data})
 
-@app.route('/logs')
-def show_logs():
-    html = """
-    <h2>Postback Logs</h2>
-    <ul>
-    {% for log in logs %}
-      <li>{{ log }}</li>
-    {% endfor %}
-    </ul>
-    """
-    return render_template_string(html, logs=logs)
+# @app.route('/logs')
+# def show_logs():
+#     html = """
+#     <h2>Postback Logs</h2>
+#     <ul>
+#     {% for log in logs %}
+#       <li>{{ log }}</li>
+#     {% endfor %}
+#     </ul>
+#     """
+#     return render_template_string(html, logs=logs)
+@app.route('/postbacks/delete/<int:postback_id>', methods=['POST'])
+@login_required
+def delete_postback(postback_id):
+    pb = Postback.query.filter_by(id=postback_id, user_id=current_user.id).first_or_404()
+    db.session.delete(pb)
+    db.session.commit()
+    flash('Postback deleted.', 'info')
+    return redirect(url_for('manage_postbacks'))
+
+@app.route('/postbacks', methods=['GET', 'POST'])
+@login_required
+def manage_postbacks():
+    if request.method == 'POST':
+        base_url = request.form.get('domain').strip()
+        selected_fields = []
+
+        possible_fields = [
+            'form_id', 'id', 'submitted_at', 'user_id', 'company_id', 'status',
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'device_type'
+        ]
+
+        for field in possible_fields:
+            if request.form.get(f'include_{field}'):
+                selected_fields.append(f"{field}={{{field}}}")  # Placeholder syntax
+
+        final_url = base_url
+        if selected_fields:
+            final_url += '?' + '&'.join(selected_fields)
+
+        new_postback = Postback(url=final_url, user_id=current_user.id)
+        db.session.add(new_postback)
+        db.session.commit()
+        flash('Postback saved successfully!', 'success')
+        return redirect(url_for('manage_postbacks'))
+
+    postbacks = Postback.query.filter_by(user_id=current_user.id).all()
+    return render_template('manage_postbacks.html', postbacks=postbacks)
+
+
 
 if __name__ == '__main__':
     with app.app_context():

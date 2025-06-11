@@ -13,8 +13,10 @@
         <div class="card shadow">
             <div class="card-body p-4">
                 <div class="mb-3">
-                    <label for="postbackUrl" class="form-label">Postback URL:</label>
-                    <input type="text" class="form-control" id="postbackUrl" placeholder="Enter Postback URL (with optional {username}, {payout})" />
+                   <label for="postbackUrl" class="form-label">Postback URL:</label>
+<input type="text" class="form-control" id="postbackUrl"
+       value="{{ postback_url }}"
+       placeholder="Enter Postback URL (with optional {username}, {company_name})" />
                 </div>
 
                 <div class="mb-3">
