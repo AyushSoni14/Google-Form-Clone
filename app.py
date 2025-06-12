@@ -30,6 +30,7 @@ from PIL import Image
 import google.generativeai as genai
 from datetime import datetime
 import re
+import threading
 # Decorator for admin access
 def admin_required(f):
     @wraps(f)
@@ -104,6 +105,24 @@ def datetime_filter(date):
 app.jinja_env.filters['datetime'] = datetime_filter
 
 # Models
+class PostbackTesterJob(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    url_template = db.Column(db.Text, nullable=False)
+    interval = db.Column(db.Integer, nullable=False)
+    duration = db.Column(db.Integer, nullable=False)  # in minutes
+    parameters = db.Column(db.JSON, nullable=True)
+    status = db.Column(db.String(20), default='running')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class PostbackTesterLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey('postback_tester_job.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(10))  # success / failed
+    response_code = db.Column(db.Integer)
+    response_text = db.Column(db.Text)
+
 class Postback(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(500), nullable=False)
@@ -281,6 +300,8 @@ class Response(db.Model):
     score = db.Column(db.Integer, nullable=True)  # Quiz score (total points)
     max_score = db.Column(db.Integer, nullable=True)  # Maximum possible score
     passed = db.Column(db.Boolean, nullable=True)  # Whether the user passed
+    #Ayush
+    form_score = db.Column(db.Integer, default=100)
     status = db.Column(db.String(50), default="success")
 
 class Answer(db.Model):
@@ -793,6 +814,42 @@ def rate_limit(limit=5, per=300):  # 5 requests per 5 minutes
         return wrapped
     return decorator
 
+
+def trigger_postbacks(response_id):
+    with app.app_context():  # 👈 this line fixes the context error
+        response = Response.query.get(response_id)
+        if not response:
+            print(f"No response found for ID: {response_id}")
+            return
+
+        form = Form.query.get(response.form_id)
+        if not form:
+            print(f"No form found for ID: {response.form_id}")
+            return
+
+        form_creator_user_id = form.user_id
+        postback_urls = Postback.query.filter_by(user_id=form_creator_user_id).all()
+
+        print("Postback URLs linked to the form creator:")
+        for url_obj in postback_urls:
+            url_template = url_obj.url
+
+            def replace_placeholder(match):
+                field_name = match.group(1)
+                return str(getattr(response, field_name, f"<missing:{field_name}>"))
+
+            triggered_url = re.sub(r'\{(\w+)\}', replace_placeholder, url_template)
+
+            try:
+                res = requests.get(triggered_url, timeout=2)
+                if res.status_code == 200:
+                    print(f"GET {triggered_url} → ✅ Success")
+                else:
+                    print(f"GET {triggered_url} → ❌ Failed (Status {res.status_code})")
+            except Exception as e:
+                print(f"GET {triggered_url} → ❌ Error: {e}")
+
+
 @app.route('/form/<int:form_id>/submit', methods=['POST'])
 @rate_limit(limit=5, per=300)  # 5 requests per 5 minutes
 def submit_form(form_id):
@@ -833,6 +890,7 @@ def submit_form(form_id):
         utm_term=utm_params.get('utm_term'),
         device_type=device_type,
         has_consent=True,
+        form_score= form.score,
         status="pending" if form.merged_url else "success"
     )
 
@@ -899,7 +957,31 @@ def submit_form(form_id):
             response.passed = False
 
     db.session.add(response)
-    db.session.commit()
+    db.session.commit() 
+    # form_id = response.form_id
+    # form_creator_user_id = Form.query.get(form_id).user_id
+    # postback_urls = Postback.query.filter_by(user_id=form_creator_user_id).all()
+    # print("Postback URLs linked to the form creator:")
+    # print("Postback URLs linked to the form creator:")
+    # for url_obj in postback_urls:
+    #   url_template = url_obj.url
+    #   def replace_placeholder(match):
+    #     field_name = match.group(1)
+    #     return str(getattr(response, field_name, f"<missing:{field_name}>"))
+    #   triggered_url = re.sub(r'\{(\w+)\}', replace_placeholder, url_template)
+    #   try:
+    #     res = requests.get(triggered_url, timeout=2)
+    #     if res.status_code == 200:
+    #         print(f"GET {triggered_url} → ✅ Success")
+    #     else:
+    #         print(f"GET {triggered_url} → ❌ Failed (Status {res.status_code})")
+    #   except Exception as e:
+    #     print(f"GET {triggered_url} → ❌ Error: {e}")
+    # Defer postback to background or another route
+    print(f"Form submitted. Will trigger postbacks for response ID: {response.id}")
+    # Trigger postbacks in the background after saving response
+    threading.Thread(target=trigger_postbacks, args=(response.id,)).start()
+
 
     # Return success response
     # return jsonify({
@@ -910,14 +992,6 @@ def submit_form(form_id):
     # redirect_url = form.merged_url if form.merged_url else url_for('form_submitted', form_id=form_id, response_id=response.id)
     # return redirect(redirect_url)
     from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
-    # if form.merged_url:
-    #    parsed_url = urlparse(form.merged_url)
-    #    query_params = parse_qs(parsed_url.query)
-    #    query_params['formClone_RespondeId'] = [str(response.id)]
-    #    new_query = urlencode(query_params, doseq=True)
-    #    redirect_url = urlunparse(parsed_url._replace(query=new_query))
-    # else:
-    #   redirect_url = url_for('form_submitted', form_id=form_id, response_id=response.id)
     if form.merged_url:
       parsed_url = urlparse(form.merged_url)
       query_params = parse_qs(parsed_url.query)
@@ -936,6 +1010,7 @@ def submit_form(form_id):
 # Add a success page route
 @app.route('/form/<int:form_id>/submitted')
 def form_submitted(form_id):
+    print("in thank you")
     form = Form.query.get_or_404(form_id)
     
     # If response_id is in the URL, fetch it for displaying quiz results
@@ -3706,17 +3781,17 @@ def end_impersonation():
     else:
         flash('Original admin user not found. Please log in again.', 'danger')
         return redirect(url_for('login'))
-@app.route('/postback_tester')
-def postback_tester():
-    postback_id = request.args.get('postback_id', type=int)
-    postback_url = ""
+# @app.route('/postback_tester')
+# def postback_tester():
+#     postback_id = request.args.get('postback_id', type=int)
+#     postback_url = ""
 
-    if postback_id:
-        postback = Postback.query.get(postback_id)
-        if postback:
-            postback_url = postback.url  # Assumes your Postback model has a 'url' field
+#     if postback_id:
+#         postback = Postback.query.get(postback_id)
+#         if postback:
+#             postback_url = postback.url  # Assumes your Postback model has a 'url' field
             
-    return render_template('postback_tester.html', postback_url=postback_url)
+#     return render_template('postback_tester.html', postback_url=postback_url)
 
 @app.route('/proxy_postback', methods=['POST'])
 def proxy_postback():
@@ -3774,35 +3849,159 @@ def delete_postback(postback_id):
     flash('Postback deleted.', 'info')
     return redirect(url_for('manage_postbacks'))
 
+
+
 @app.route('/postbacks', methods=['GET', 'POST'])
 @login_required
 def manage_postbacks():
     if request.method == 'POST':
         base_url = request.form.get('domain').strip()
         selected_fields = []
-
+        
         possible_fields = [
-            'form_id', 'id', 'submitted_at', 'user_id', 'company_id', 'status',
+            'form_id', 'id', 'submitted_at', 'user_id', 'company_id', 'form_score',
             'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'device_type'
         ]
-
+        
         for field in possible_fields:
             if request.form.get(f'include_{field}'):
-                selected_fields.append(f"{field}={{{field}}}")  # Placeholder syntax
-
+                # Get the custom parameter name, fallback to field name if not provided
+                custom_param_name = request.form.get(f'param_name_{field}', '').strip()
+                if not custom_param_name:
+                    # Use default parameter name based on field
+                    default_names = {
+                        'form_id': 'form_id',
+                        'id': 'response_id', 
+                        'submitted_at': 'submitted_at',
+                        'user_id': 'username',  # Default to 'username' for user_id
+                        'company_id': 'company_id',
+                        'form_score': 'form_score',
+                        'utm_source': 'utm_source',
+                        'utm_medium': 'utm_medium',
+                        'utm_campaign': 'utm_campaign',
+                        'utm_content': 'utm_content',
+                        'utm_term': 'utm_term',
+                        'device_type': 'device_type'
+                    }
+                    custom_param_name = default_names.get(field, field)
+                
+                # Add the custom parameter name with field placeholder
+                selected_fields.append(f"{custom_param_name}={{{field}}}")
+        
         final_url = base_url
         if selected_fields:
             final_url += '?' + '&'.join(selected_fields)
-
+        
         new_postback = Postback(url=final_url, user_id=current_user.id)
         db.session.add(new_postback)
         db.session.commit()
         flash('Postback saved successfully!', 'success')
         return redirect(url_for('manage_postbacks'))
-
+    
     postbacks = Postback.query.filter_by(user_id=current_user.id).all()
     return render_template('manage_postbacks.html', postbacks=postbacks)
 
+import threading, time, requests
+from flask import request, jsonify
+from datetime import datetime, timedelta
+
+@app.route('/start_postback_test', methods=['POST'])
+@login_required
+def start_postback_test():
+    data = request.get_json()
+    job = PostbackTesterJob(
+        user_id=current_user.id,
+        url_template=data['url'],
+        interval=data['interval'],
+        duration=data['duration'],
+        parameters=data.get('parameters', {})
+    )
+    db.session.add(job)
+    db.session.commit()
+
+    threading.Thread(target=run_postback_job, args=(job.id,), daemon=True).start()
+    return jsonify({'status': 'started', 'job_id': job.id})
+@app.route('/stop_postback_test/<int:job_id>', methods=['POST'])
+@login_required
+def stop_postback_test(job_id):
+    job = PostbackTesterJob.query.get_or_404(job_id)
+    if job.user_id != current_user.id:
+        abort(403)
+    job.status = 'stopped'
+    db.session.commit()
+    return jsonify({'status': 'stopped'})
+def run_postback_job(job_id):
+    with app.app_context():
+        job = PostbackTesterJob.query.get(job_id)
+        if not job or job.status != 'running':
+            return
+
+        end_time = datetime.utcnow() + timedelta(minutes=job.duration)
+
+        while datetime.utcnow() < end_time and job.status == 'running':
+            url = job.url_template
+            for k, v in (job.parameters or {}).items():
+                url = url.replace(f"{{{k}}}", str(v))
+
+            try:
+                r = requests.get(url, timeout=5)
+                log = PostbackTesterLog(
+                    job_id=job.id,
+                    status='success' if r.status_code == 200 else 'failed',
+                    response_code=r.status_code,
+                    response_text=r.text[:300]
+                )
+            except Exception as e:
+                log = PostbackTesterLog(
+                    job_id=job.id,
+                    status='failed',
+                    response_code=0,
+                    response_text=str(e)
+                )
+            db.session.add(log)
+            db.session.commit()
+            time.sleep(job.interval)
+
+        job.status = 'stopped'
+        db.session.commit()
+@app.route('/postback_tester')
+@login_required
+def postback_tester():
+    postback_id = request.args.get('postback_id', type=int)
+    postback_url = ""
+    if postback_id:
+        postback = Postback.query.get(postback_id)
+        if postback:
+            postback_url = postback.url  # Assumes your Postback model has a 'url' field
+    jobs = PostbackTesterJob.query.filter_by(user_id=current_user.id).order_by(PostbackTesterJob.created_at.desc()).all()
+    logs = {job.id: PostbackTesterLog.query.filter_by(job_id=job.id).all() for job in jobs}
+    return render_template('postback_tester.html', jobs=jobs, logs=logs,postback_url=postback_url)
+@app.route('/get_postback_logs/<int:job_id>')
+@login_required
+def get_postback_logs(job_id):
+    job = PostbackTesterJob.query.get_or_404(job_id)
+    
+    # Security: Only allow owner
+    if job.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    logs = PostbackTesterLog.query.filter_by(job_id=job.id).order_by(PostbackTesterLog.timestamp.asc()).all()
+
+    return jsonify([
+        {
+            'timestamp': log.timestamp.strftime('%H:%M:%S'),
+            'status': log.status,
+            'code': log.response_code,
+            'text': log.response_text[:100]
+        } for log in logs
+    ])
+@app.route('/get_job_statuses')
+def get_job_statuses():
+    jobs = []  # Get your jobs from database
+    return jsonify([{
+        'id': job.id, 
+        'status': job.status
+    } for job in jobs])
 
 
 if __name__ == '__main__':

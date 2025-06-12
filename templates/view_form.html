@@ -296,7 +296,7 @@
     </div>
   </div>
   
-  <form id="response-form" method="POST" action="{{ url_for('submit_form', form_id=form.id) }}" {% if is_closed %}class="opacity-75"{% endif %} onsubmit="return handleSubmit(event)">
+  <form id="response-form" method="POST" action="{{ url_for('submit_form', form_id=form.id) }}" {% if is_closed %}class="opacity-75"{% endif %} >
     {% for question in form.questions %}
       <div class="card mb-4 question-card" style="--animation-order: {{ loop.index }}" data-question-id="{{ question.id }}">
         <div class="card-body">

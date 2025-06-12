@@ -94,7 +94,6 @@
                     <thead>
                         <tr>
                             <th>Submission Date</th>
-                            <th>Company</th>
                             <th>User ID</th>
                             <th>Company Name</th>
                             <th>Form Status</th>
@@ -112,7 +111,6 @@
                         {% set response = data.response %}
                         <tr>
                             <td>{{ moment(response.submitted_at).format('YYYY-MM-DD HH:mm') }}</td>
-                            <td>{{ response.company.name if response.company else 'N/A' }}</td>
                             <td>{{ response.user_id if response.user_id else 'N/A' }}</td>
                             <td>{{ response.company_name if response.company_name else 'N/A' }}</td>
                             <td>{{ response.status if response.status else 'N/A' }}</td>
