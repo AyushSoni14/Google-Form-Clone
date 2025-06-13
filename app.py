@@ -303,6 +303,7 @@ class Response(db.Model):
     #Ayush
     form_score = db.Column(db.Integer, default=100)
     status = db.Column(db.String(50), default="success")
+    sub1 = db.Column(db.String(100), nullable=True)
 
 class Answer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -865,7 +866,9 @@ def submit_form(form_id):
     # Get user_id and company_name from query parameters
     user_id = request.args.getlist('q')[0]  # First 'q' param = userId
     company_name = request.args.getlist('q')[1]  # Second 'q' param = companyName
-    
+    sub1 = request.args.get('sub1')  # returns None if not present
+  
+
     # Verify reCAPTCHA
     # if not verify_recaptcha(request.form.get('g-recaptcha-response')):
     #     return jsonify({
@@ -891,7 +894,8 @@ def submit_form(form_id):
         device_type=device_type,
         has_consent=True,
         form_score= form.score,
-        status="pending" if form.merged_url else "success"
+        status="pending" if form.merged_url else "success",
+        sub1=sub1
     )
 
     # Get geolocation data
@@ -3860,7 +3864,7 @@ def manage_postbacks():
         
         possible_fields = [
             'form_id', 'id', 'submitted_at', 'user_id', 'company_id', 'form_score',
-            'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'device_type'
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'device_type','sub1'
         ]
         
         for field in possible_fields:
@@ -3881,7 +3885,8 @@ def manage_postbacks():
                         'utm_campaign': 'utm_campaign',
                         'utm_content': 'utm_content',
                         'utm_term': 'utm_term',
-                        'device_type': 'device_type'
+                        'device_type': 'device_type',
+                        'sub1':'sub1'
                     }
                     custom_param_name = default_names.get(field, field)
                 
