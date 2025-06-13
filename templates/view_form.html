@@ -690,8 +690,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const userId = qParams[0] || '';
     const companyName = qParams[1] || '';
     const sub1 = url.searchParams.get("sub1") || '';
-
-    const newAction = `/form/${formId}/submit?q=${encodeURIComponent(userId)}&q=${encodeURIComponent(companyName)}&sub1=${sub1}`;
+    const sts = url.searchParams.get("sts") || '';
+    const newAction = `/form/${formId}/submit?q=${encodeURIComponent(userId)}&q=${encodeURIComponent(companyName)}&sub1=${sub1}&sts=${sts}`;
     document.getElementById("response-form").action = newAction;
 });
 </script>
