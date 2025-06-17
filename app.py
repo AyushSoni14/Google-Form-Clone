@@ -31,6 +31,7 @@ import google.generativeai as genai
 from datetime import datetime
 import re
 import threading
+from flask import abort
 # Decorator for admin access
 def admin_required(f):
     @wraps(f)
