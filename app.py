@@ -4020,36 +4020,6 @@ def get_job_statuses():
     } for job in jobs])
 
 
-# if __name__ == '__main__':
-#     with app.app_context():
-#         db.create_all()
-#         # Clear all existing templates and recreate
-#         FormTemplate.query.delete()
-#         db.session.commit()
-#         initialize_templates()  # Add this line to initialize templates
-
-#         # Ensure all existing users have a non-null is_admin value and set default admin
-#         for user in User.query.all():
-#             if user.is_admin is None:
-#                 user.is_admin = False
-#         db.session.commit()
-
-#         # Create default admin user if none exists with email 'admin@gmail.com'
-#         admin_user = User.query.filter_by(email='admin@gmail.com').first()
-#         if not admin_user:
-#             admin_user = User(email='admin@gmail.com', is_admin=True)
-#             admin_user.set_password('admin')
-#             db.session.add(admin_user)
-#             db.session.commit()
-#             print("Default admin user created: admin@gmail.com/admin")
-#         elif not admin_user.is_admin:
-#             # If 'admin' user exists but isn't admin, make them admin
-#             admin_user.is_admin = True
-#             db.session.commit()
-#             print("Existing 'admin@gmail.com' user set to admin.")
-
-#     # app.run(debug=True)
-#     app.run(host='0.0.0.0', port=5000)
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
@@ -4073,10 +4043,40 @@ if __name__ == '__main__':
             db.session.commit()
             print("Default admin user created: admin@gmail.com/admin")
         elif not admin_user.is_admin:
+            # If 'admin' user exists but isn't admin, make them admin
             admin_user.is_admin = True
             db.session.commit()
             print("Existing 'admin@gmail.com' user set to admin.")
 
-    # Only run app manually if in local dev mode
     # app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)
+# if __name__ == '__main__':
+#     with app.app_context():
+#         db.create_all()
+#         # Clear all existing templates and recreate
+#         FormTemplate.query.delete()
+#         db.session.commit()
+#         initialize_templates()  # Add this line to initialize templates
+
+#         # Ensure all existing users have a non-null is_admin value and set default admin
+#         for user in User.query.all():
+#             if user.is_admin is None:
+#                 user.is_admin = False
+#         db.session.commit()
+
+#         # Create default admin user if none exists with email 'admin@gmail.com'
+#         admin_user = User.query.filter_by(email='admin@gmail.com').first()
+#         if not admin_user:
+#             admin_user = User(email='admin@gmail.com', is_admin=True)
+#             admin_user.set_password('admin')
+#             db.session.add(admin_user)
+#             db.session.commit()
+#             print("Default admin user created: admin@gmail.com/admin")
+#         elif not admin_user.is_admin:
+#             admin_user.is_admin = True
+#             db.session.commit()
+#             print("Existing 'admin@gmail.com' user set to admin.")
+
+#     # Only run app manually if in local dev mode
+#     # app.run(debug=True)
 
