@@ -139,7 +139,7 @@ class Postback(db.Model):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128))
+    password_hash = db.Column(db.String(256))
     is_admin = db.Column(db.Boolean, default=False)
     forms = db.relationship('Form', backref='author', lazy=True)
     postbacks = db.relationship('Postback', backref='user', lazy=True, cascade='all, delete-orphan')
