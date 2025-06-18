@@ -50,7 +50,12 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://himanshu:Smtr%409911@pepperads.mysql.database.azure.com/pepeleads'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://himanshu%40pepperads:Smtr%409911@pepperads.mysql.database.azure.com/pepeleads'
+basedir = os.path.abspath(os.path.dirname(__file__))
+
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    "mysql+pymysql://himanshu:Ayushsoni14@pepperads.mysql.database.azure.com/pepeleads"
+    f"?ssl_ca={os.path.join(basedir, 'certs', 'DigiCertGlobalRootCA.crt.pem')}"
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
