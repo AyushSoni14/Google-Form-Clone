@@ -478,7 +478,7 @@ def detect_device_type(user_agent):
     
 @app.route('/')
 def index():
-    if 'pepper.live'  in request.host:
+    if 'peppper.live'  in request.host:
         abort(403)
     # Extract UTM parameters and session ID
     utm_params = extract_utm_parameters(request)
