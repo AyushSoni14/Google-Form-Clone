@@ -64,7 +64,7 @@ app.config['RECAPTCHA_SITE_KEY'] = os.getenv('RECAPTCHA_SITE_KEY')
 app.config['RECAPTCHA_SECRET_KEY'] = os.getenv('RECAPTCHA_SECRET_KEY')
 app.config['RECAPTCHA_VERIFY_URL'] = 'https://www.google.com/recaptcha/api/siteverify'
 app.jinja_env.filters['fromjson'] = json.loads
-
+app.config['SERVER_NAME'] = 'pepper-ads.com' 
 # Configure Google Generative AI with HTTP transport
 try:
     google.generativeai.configure(
@@ -609,7 +609,7 @@ def create_form():
         
     return render_template('create_form.html')
 
-@app.route('/form/<int:form_id>')
+@app.route('/form/<int:form_id>',subdomain='live')
 def view_form(form_id):
     form = Form.query.get_or_404(form_id)
     
