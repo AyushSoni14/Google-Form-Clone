@@ -12,6 +12,15 @@
     <div class="tab-content" id="adminTabsContent">
         <div class="tab-pane fade show active" id="users" role="tabpanel" aria-labelledby="users-tab">
             <h2>All Users</h2>
+            <!-- User Filter Form -->
+            <form method="get" class="row g-2 mb-3">
+                <div class="col-auto">
+                    <input type="text" name="user_email" class="form-control" placeholder="Search by email" value="{{ user_email|default('') }}">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                </div>
+            </form>
             <div class="table-responsive">
                 <table class="table table-hover">
                     <thead>
@@ -59,6 +68,23 @@
 
         <div class="tab-pane fade" id="forms" role="tabpanel" aria-labelledby="forms-tab">
             <h2>All Forms</h2>
+            <!-- Form Filter Form -->
+            <form method="get" class="row g-2 mb-3">
+                <div class="col-auto">
+                    <input type="text" name="form_title" class="form-control" placeholder="Search by title" value="{{ form_title|default('') }}">
+                </div>
+                <div class="col-auto">
+                    <label for="form_status" class="visually-hidden">Form Status</label>
+                    <select id="form_status" name="form_status" class="form-select">
+                        <option value="all" {% if form_status == 'all' %}selected{% endif %}>All Statuses</option>
+                        <option value="open" {% if form_status == 'open' %}selected{% endif %}>Open</option>
+                        <option value="closed" {% if form_status == 'closed' %}selected{% endif %}>Closed</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                </div>
+            </form>
             <div class="table-responsive">
                 <table class="table table-hover">
                     <thead>
@@ -68,6 +94,8 @@
                             <th>Author</th>
                             <th>Created At</th>
                             <th>Status</th>
+                            <th>Form Type</th>
+                            <th>Gross Clicks</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -75,7 +103,13 @@
                         {% for form in forms %}
                         <tr>
                             <td>{{ form.id }}</td>
-                            <td><a href="{{ url_for('view_form', form_id=form.id) }}">{{ form.title }}</a></td>
+                            <td>
+                                {% if form.is_external %}
+                                <a href="{{ form.external_url }}" target="_blank">{{ form.title }} <i class="fas fa-external-link-alt ms-1"></i></a>
+                                {% else %}
+                                <a href="{{ url_for('view_form', form_id=form.id) }}">{{ form.title }}</a>
+                                {% endif %}
+                            </td>
                             <td>{{ form.author.email }}</td>
                             <td>{{ form.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>
@@ -86,6 +120,14 @@
                                 {% endif %}
                             </td>
                             <td>
+                                {% if form.is_external %}
+                                <span class="badge bg-info">External</span>
+                                {% else %}
+                                <span class="badge bg-primary">Internal</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ form_gross_clicks.get(form.id, 0) }}</td>
+                            <td>
                                 <form action="{{ url_for('toggle_form_status', form_id=form.id) }}" method="post" style="display:inline;">
                                     <button type="submit" class="btn btn-sm {% if form.is_closed %}btn-outline-success{% else %}btn-outline-warning{% endif %}">
                                         {% if form.is_closed %}Reopen{% else %}Close{% endif %}
@@ -95,6 +137,73 @@
                                     <input type="hidden" name="_method" value="DELETE">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                                 </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Responses Section -->
+        <div class="tab-pane fade" id="responses" role="tabpanel" aria-labelledby="responses-tab">
+            <h2>All Responses</h2>
+            <!-- Response Filter Form -->
+            <form method="get" class="row g-2 mb-3">
+                <div class="col-auto">
+                    <input type="text" name="response_form_title" class="form-control" placeholder="Search by form title" value="{{ response_form_title|default('') }}">
+                </div>
+                <div class="col-auto">
+                    <input type="text" name="response_user_id" class="form-control" placeholder="Search by user ID" value="{{ response_user_id|default('') }}">
+                </div>
+                <div class="col-auto">
+                    <label for="response_status" class="visually-hidden">Response Status</label>
+                    <select id="response_status" name="response_status" class="form-select">
+                        <option value="all" {% if response_status == 'all' %}selected{% endif %}>All Statuses</option>
+                        <option value="success" {% if response_status == 'success' %}selected{% endif %}>Success</option>
+                        <option value="pending" {% if response_status == 'pending' %}selected{% endif %}>Pending</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <input type="date" name="response_start_date" class="form-control" placeholder="Start date" value="{{ response_start_date|default('') }}">
+                </div>
+                <div class="col-auto">
+                    <input type="date" name="response_end_date" class="form-control" placeholder="End date" value="{{ response_end_date|default('') }}">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                </div>
+            </form>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Form Title</th>
+                            <th>User ID</th>
+                            <th>Submitted At</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for response in responses %}
+                        <tr>
+                            <td>{{ response.id }}</td>
+                            <td>{{ response.form.title if response.form else '' }}</td>
+                            <td>{{ response.user_id }}</td>
+                            <td>{{ response.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                {% if response.status == 'success' %}
+                                <span class="badge bg-success">Success</span>
+                                {% elif response.status == 'pending' %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ response.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('view_responses', form_id=response.form_id) }}" class="btn btn-sm btn-outline-info">View</a>
                             </td>
                         </tr>
                         {% endfor %}

@@ -14,7 +14,7 @@ import random
 import requests
 from datetime import datetime
 import uuid
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote_plus
 import copy
 import google.generativeai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
@@ -30,6 +30,8 @@ from PIL import Image
 import google.generativeai as genai
 from datetime import datetime
 import re
+from sqlalchemy import func
+from datetime import timedelta
 import threading
 from flask import abort
 # Decorator for admin access
@@ -49,13 +51,15 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://himanshu:Smtr%409911@pepperads.mysql.database.azure.com/pepeleads'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     "mysql+pymysql://himanshu:Ayushsoni14@pepperads.mysql.database.azure.com/pepeleads"
     f"?ssl_ca={os.path.join(basedir, 'certs', 'DigiCertGlobalRootCA.crt.pem')}"
 )
+
+
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -139,7 +143,7 @@ class Postback(db.Model):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256))
+    password_hash = db.Column(db.String(128))
     is_admin = db.Column(db.Boolean, default=False)
     forms = db.relationship('Form', backref='author', lazy=True)
     postbacks = db.relationship('Postback', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -173,6 +177,11 @@ class Form(db.Model):
     passing_score = db.Column(db.Integer, default=0)  # Passing score percentage
     show_score = db.Column(db.Boolean, default=True)  # Whether to show score to respondents
     merged_url = db.Column(db.String(255), nullable=True, default='')
+    external_url = db.Column(db.String(500), nullable=True) # URL of an external form
+    is_external = db.Column(db.Boolean, default=False) # True if this form redirects to an external URL
+    external_webhook_secret = db.Column(db.String(100), nullable=True, unique=True) # Secret for external form webhooks
+    allowed_countries = db.Column(db.Text, nullable=True) # JSON string of allowed country codes (e.g., ["US", "CA"])
+    blocked_countries = db.Column(db.Text, nullable=True) # JSON string of blocked country codes (e.g., ["CN", "RU"])
 
 class SubQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -303,17 +312,27 @@ class Response(db.Model):
     device_type = db.Column(db.String(20), nullable=True)
     # Privacy and Terms consent
     has_consent = db.Column(db.Boolean, default=False)
-    
     # Quiz-related fields
     score = db.Column(db.Integer, nullable=True)  # Quiz score (total points)
     max_score = db.Column(db.Integer, nullable=True)  # Maximum possible score
     passed = db.Column(db.Boolean, nullable=True)  # Whether the user passed
-    #Ayush
-    form_score = db.Column(db.Integer, default=100)
     status = db.Column(db.String(50), default="success")
+    # New fields for analytics
+    session_id = db.Column(db.String(100), nullable=True)
+    complete_id = db.Column(db.String(100), nullable=True)
+    browser = db.Column(db.Text, nullable=True)
+    date_time_clicked = db.Column(db.String(50), nullable=True)
+    date_time_completed = db.Column(db.String(50), nullable=True)
+    time_spent = db.Column(db.String(50), nullable=True)
+    time_per_question = db.Column(db.Text, nullable=True)  # Store as JSON string
+    is_suspicious = db.Column(db.Boolean, default=False) # New field for suspicious activity
+    actual_ip = db.Column(db.String(50), nullable=True) # Actual IP of the user
+    session_ip = db.Column(db.String(50), nullable=True) # IP at the start of the session
+    conversion_ip = db.Column(db.String(50), nullable=True) # IP at the point of conversion (submission)
+    is_rejected = db.Column(db.Boolean, default=False) # New field for rejected clicks (e.g., bot activity)
     sub1 = db.Column(db.String(100), nullable=True)
     sts = db.Column(db.String(100), nullable=True)
-
+    form_score = db.Column(db.Integer, default=100)
 class Answer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     response_id = db.Column(db.Integer, db.ForeignKey('response.id'), nullable=False)
@@ -385,6 +404,14 @@ class Geolocation(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     response = db.relationship('Response', backref='geolocation')
+
+class FormView(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    form_id = db.Column(db.Integer, db.ForeignKey('form.id'), nullable=False)
+    viewed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ip_address = db.Column(db.String(50), nullable=True)
+    session_id = db.Column(db.String(100), nullable=True)
+    form = db.relationship('Form', backref='views')
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -476,6 +503,26 @@ def detect_device_type(user_agent):
     else:
         return 'desktop'
     
+def get_user_country_from_ip(ip_address):
+    """Placeholder function to get country from IP address.
+    In a real application, this would use a reliable IP geolocation service.
+    For demonstration, it returns a hardcoded value or attempts a basic local lookup.
+    """
+    if ip_address == '127.0.0.1' or ip_address == 'localhost':
+        return "US" # Default for local development
+    
+    # In a real scenario, integrate with a service like ip-api.com, GeoLite2, etc.
+    # Example (requires 'requests' library and an actual API):
+    # try:
+    #     response = requests.get(f"http://ip-api.com/json/{ip_address}")
+    #     data = response.json()
+    #     if data['status'] == 'success':
+    #         return data['countryCode']
+    # except Exception as e:
+    #     app.logger.error(f"IP geolocation failed for {ip_address}: {e}")
+    
+    return "UNKNOWN" # Default if geolocation fails or not implemented
+    
 @app.route('/')
 def index():
     if 'peppper.live'  in request.host:
@@ -526,6 +573,8 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if 'peppper.live'  in request.host:
+        abort(403)
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
@@ -539,6 +588,8 @@ def login():
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
+    if 'peppper.live'  in request.host:
+        abort(403)
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
@@ -559,6 +610,8 @@ def signup():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    if 'peppper.live'  in request.host:
+        abort(403)
     try:
         # Get user's forms
         forms = Form.query.filter_by(user_id=current_user.id).all()
@@ -584,11 +637,23 @@ def dashboard():
 @app.route('/create_form', methods=['GET', 'POST'])
 @login_required
 def create_form():
+    if 'peppper.live'  in request.host:
+        abort(403)
     if request.method == 'POST':
         title = request.form.get('title')
         description = request.form.get('description')
         requires_consent = 'requires_consent' in request.form
         score = request.form.get('score', 100)
+        is_external = 'is_external' in request.form
+        external_url = request.form.get('external_url')
+
+        # If it's an external form, some fields might not be directly applicable
+        if is_external:
+            # For external forms, score and requires_consent might not be explicitly set
+            # Set them to default values or handle as needed.
+            # For now, we'll keep what's submitted or their default model values.
+            pass
+
         print("score=",score)
         # Create a new form
         form = Form(
@@ -597,8 +662,23 @@ def create_form():
             user_id=current_user.id,
             company_id=session.get('referral_company_id'),
             requires_consent=requires_consent,
-            score=score
+            score=score,
+            is_external=is_external,
+            external_url=external_url
         )
+
+        # Process country restrictions
+        allowed_countries_input = request.form.get('allowed_countries', '').strip()
+        if allowed_countries_input:
+            form.allowed_countries = json.dumps([c.strip().upper() for c in allowed_countries_input.split(',') if c.strip()])
+        else:
+            form.allowed_countries = None # Or an empty JSON array if you prefer
+        
+        blocked_countries_input = request.form.get('blocked_countries', '').strip()
+        if blocked_countries_input:
+            form.blocked_countries = json.dumps([c.strip().upper() for c in blocked_countries_input.split(',') if c.strip()])
+        else:
+            form.blocked_countries = None # Or an empty JSON array if you prefer
         
         # Add form to database
         db.session.add(form)
@@ -614,6 +694,58 @@ def create_form():
 @app.route('/form/<int:form_id>')
 def view_form(form_id):
     form = Form.query.get_or_404(form_id)
+    
+    # If it's an external form, redirect to the external URL
+    if form.is_external and form.external_url:
+        return redirect(form.external_url)
+    
+    # Implement country-based access restriction
+    user_country = get_user_country_from_ip(request.remote_addr)
+    is_blocked = False
+    block_reason = ""
+
+    # Parse allowed and blocked countries
+    allowed_countries = []
+    if form.allowed_countries:
+        try:
+            allowed_countries = json.loads(form.allowed_countries)
+        except json.JSONDecodeError:
+            app.logger.warning(f"Could not parse allowed_countries for form {form.id}: {form.allowed_countries}")
+
+    blocked_countries = []
+    if form.blocked_countries:
+        try:
+            blocked_countries = json.loads(form.blocked_countries)
+        except json.JSONDecodeError:
+            app.logger.warning(f"Could not parse blocked_countries for form {form.id}: {form.blocked_countries}")
+
+    if user_country == "UNKNOWN":
+        # If country cannot be determined, and restrictions are in place, block access for safety
+        if allowed_countries or blocked_countries:
+            is_blocked = True
+            block_reason = "Your location could not be determined, and this form has country restrictions."
+    elif blocked_countries and user_country in blocked_countries:
+        is_blocked = True
+        block_reason = f"Access from your country ({user_country}) is blocked for this form."
+    elif allowed_countries and user_country not in allowed_countries:
+        is_blocked = True
+        block_reason = f"Access to this form is only allowed from specific countries, and your country ({user_country}) is not among them."
+
+    if is_blocked:
+        return render_template('blocked_access.html', block_reason=block_reason)
+
+    # Capture Session IP if not already set for this session
+    if 'session_ip' not in session:
+        session['session_ip'] = request.remote_addr
+    
+    # Record form view (gross click)
+    form_view = FormView(
+        form_id=form.id,
+        ip_address=request.remote_addr,
+        session_id=session.get('session_id') # Use the session_id we're already collecting
+    )
+    db.session.add(form_view)
+    db.session.commit()
     
     # Get all subquestions for this form
     subquestions = SubQuestion.query.join(Question).filter(Question.form_id == form_id).all()
@@ -672,6 +804,8 @@ def view_form(form_id):
 @app.route('/form/<int:form_id>/edit')
 @login_required
 def edit_form(form_id):
+    if 'peppper.live'  in request.host:
+        abort(403)
     form = Form.query.get_or_404(form_id)
     if form.user_id != current_user.id:
         return redirect(url_for('dashboard'))
@@ -688,6 +822,8 @@ def edit_form(form_id):
 @app.route('/logout')
 @login_required
 def logout():
+    if 'peppper.live'  in request.host:
+        abort(403)
     logout_user()
     return redirect(url_for('index'))
 
@@ -825,8 +961,6 @@ def rate_limit(limit=5, per=300):  # 5 requests per 5 minutes
             return f(*args, **kwargs)
         return wrapped
     return decorator
-
-
 def trigger_postbacks(response_id):
     with app.app_context():  # 👈 this line fixes the context error
         response = Response.query.get(response_id)
@@ -860,8 +994,6 @@ def trigger_postbacks(response_id):
                     print(f"GET {triggered_url} → ❌ Failed (Status {res.status_code})")
             except Exception as e:
                 print(f"GET {triggered_url} → ❌ Error: {e}")
-
-
 @app.route('/form/<int:form_id>/submit', methods=['POST'])
 @rate_limit(limit=5, per=300)  # 5 requests per 5 minutes
 def submit_form(form_id):
@@ -879,7 +1011,6 @@ def submit_form(form_id):
     company_name = request.args.getlist('q')[1]  # Second 'q' param = companyName
     sub1 = request.args.get('sub1')  # returns None if not present
     sts = request.args.get('sts')
-
     # Verify reCAPTCHA
     # if not verify_recaptcha(request.form.get('g-recaptcha-response')):
     #     return jsonify({
@@ -891,23 +1022,68 @@ def submit_form(form_id):
     utm_params = extract_utm_parameters(request)
     device_type = detect_device_type(request.user_agent.string)
     
+    # Debug: Print UTM parameters received from the form
+    print("UTM Source:", request.form.get('utm_source'))
+    print("UTM Medium:", request.form.get('utm_medium'))
+    print("UTM Campaign:", request.form.get('utm_campaign'))
+    print("UTM Content:", request.form.get('utm_content'))
+    print("UTM Term:", request.form.get('utm_term'))
+    print("---- Debug: Response Object Values ----")
+    print("form_id:", form_id)
+    print("company_id:", form.company_id)
+    print("user_id:", user_id)
+    print("company_name:", company_name)
+    print("utm_source:", request.form.get('utm_source'))
+    print("utm_medium:", request.form.get('utm_medium'))
+    print("utm_campaign:", request.form.get('utm_campaign'))
+    print("utm_content:", request.form.get('utm_content'))
+    print("utm_term:", request.form.get('utm_term'))
+    print("device_type:", device_type)
+    print("has_consent:", True)
+    print("status:", "pending" if form.merged_url else "success")
+    print("session_id:", request.form.get('session_id'))
+    print("complete_id:", request.form.get('complete_id'))
+    print("browser:", request.form.get('browser'))
+    print("date_time_clicked:", request.form.get('date_time_clicked'))
+    print("date_time_completed:", request.form.get('date_time_completed'))
+    print("time_spent:", request.form.get('time_spent'))
+    print("time_per_question:", request.form.get('time_per_question'))
+    print("actual_ip:", request.remote_addr)
+    print("session_ip:", session.get('session_ip'))
+    print("conversion_ip:", request.remote_addr)
+    print("sub1:", sub1)
+    print("sts:", sts)
+    print("form_score:", form.score)
+    print("---------------------------------------")
+
     # Create response object
     response = Response(
         form_id=form_id,
         company_id=form.company_id,
         user_id=user_id,                  
         company_name=company_name,        
-        utm_source=utm_params.get('utm_source'),
-        utm_medium=utm_params.get('utm_medium'),
-        utm_campaign=utm_params.get('utm_campaign'),
-        utm_content=utm_params.get('utm_content'),
-        utm_term=utm_params.get('utm_term'),
+        utm_source=request.form.get('utm_source'),
+        utm_medium=request.form.get('utm_medium'),
+        utm_campaign=request.form.get('utm_campaign'),
+        utm_content=request.form.get('utm_content'),
+        utm_term=request.form.get('utm_term'),
         device_type=device_type,
         has_consent=True,
-        form_score= form.score,
         status="pending" if form.merged_url else "success",
+        session_id=request.form.get('session_id'),
+        complete_id=request.form.get('complete_id'),
+        browser=request.form.get('browser'),
+        date_time_clicked=request.form.get('date_time_clicked'),
+        date_time_completed=request.form.get('date_time_completed'),
+        time_spent=request.form.get('time_spent'),
+        time_per_question=request.form.get('time_per_question'),
+        # New IP fields
+        actual_ip=request.remote_addr,
+        session_ip=session.get('session_ip'),
+        conversion_ip=request.remote_addr,
         sub1=sub1,
-        sts=sts
+        sts=sts,
+        form_score= form.score,
     )
 
     # Get geolocation data
@@ -972,33 +1148,33 @@ def submit_form(form_id):
         else:
             response.passed = False
 
+    # Calculate and set is_suspicious flag
+    if response.time_per_question:
+        try:
+            question_times = json.loads(response.time_per_question)
+            for question_name, time_spent in question_times.items():
+                if time_spent > 3:  # More than 3 seconds on a question
+                    response.is_suspicious = True
+                    break  # Found one suspicious, no need to check further
+        except json.JSONDecodeError:
+            print("Error parsing time_per_question JSON")
+
+    # Calculate and set is_rejected flag
+    time_spent_str = request.form.get('time_spent')
+    if time_spent_str:
+        try:
+            time_spent_seconds = float(time_spent_str)
+            # Mark as rejected if time_spent is less than a very small threshold (e.g., 0.1 seconds)
+            if time_spent_seconds < 0.1:
+                response.is_rejected = True
+        except ValueError:
+            print(f"Warning: Could not convert time_spent '{time_spent_str}' to float.")
+
     db.session.add(response)
-    db.session.commit() 
-    # form_id = response.form_id
-    # form_creator_user_id = Form.query.get(form_id).user_id
-    # postback_urls = Postback.query.filter_by(user_id=form_creator_user_id).all()
-    # print("Postback URLs linked to the form creator:")
-    # print("Postback URLs linked to the form creator:")
-    # for url_obj in postback_urls:
-    #   url_template = url_obj.url
-    #   def replace_placeholder(match):
-    #     field_name = match.group(1)
-    #     return str(getattr(response, field_name, f"<missing:{field_name}>"))
-    #   triggered_url = re.sub(r'\{(\w+)\}', replace_placeholder, url_template)
-    #   try:
-    #     res = requests.get(triggered_url, timeout=2)
-    #     if res.status_code == 200:
-    #         print(f"GET {triggered_url} → ✅ Success")
-    #     else:
-    #         print(f"GET {triggered_url} → ❌ Failed (Status {res.status_code})")
-    #   except Exception as e:
-    #     print(f"GET {triggered_url} → ❌ Error: {e}")
-    # Defer postback to background or another route
+    db.session.commit()
     print(f"Form submitted. Will trigger postbacks for response ID: {response.id}")
     # Trigger postbacks in the background after saving response
     threading.Thread(target=trigger_postbacks, args=(response.id,)).start()
-
-
     # Return success response
     # return jsonify({
     #     'status': 'success',
@@ -1008,6 +1184,14 @@ def submit_form(form_id):
     # redirect_url = form.merged_url if form.merged_url else url_for('form_submitted', form_id=form_id, response_id=response.id)
     # return redirect(redirect_url)
     from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+    # if form.merged_url:
+    #    parsed_url = urlparse(form.merged_url)
+    #    query_params = parse_qs(parsed_url.query)
+    #    query_params['formClone_RespondeId'] = [str(response.id)]
+    #    new_query = urlencode(query_params, doseq=True)
+    #    redirect_url = urlunparse(parsed_url._replace(query=new_query))
+    # else:
+    #   redirect_url = url_for('form_submitted', form_id=form_id, response_id=response.id)
     if form.merged_url:
       parsed_url = urlparse(form.merged_url)
       query_params = parse_qs(parsed_url.query)
@@ -1026,7 +1210,6 @@ def submit_form(form_id):
 # Add a success page route
 @app.route('/form/<int:form_id>/submitted')
 def form_submitted(form_id):
-    print("in thank you")
     form = Form.query.get_or_404(form_id)
     
     # If response_id is in the URL, fetch it for displaying quiz results
@@ -1041,13 +1224,13 @@ def form_submitted(form_id):
 @app.route('/form/<int:form_id>/responses')
 @login_required
 def view_responses(form_id):
+    if 'peppper.live'  in request.host:
+        abort(403)
     form = Form.query.get_or_404(form_id)
-    if form.user_id != current_user.id:
+    if not (current_user.is_admin or form.user_id == current_user.id):
         flash('You do not have permission to view these responses')
         return redirect(url_for('dashboard'))
-    
     responses = Response.query.filter_by(form_id=form_id).all()
-    
     # Get geolocation data for each response
     response_data = []
     for response in responses:
@@ -1057,11 +1240,16 @@ def view_responses(form_id):
             'geolocation': geo
         })
     
-    return render_template('view_responses.html', form=form, response_data=response_data)
+    # Get gross clicks for this specific form
+    gross_clicks = db.session.query(func.count(FormView.id)).filter(FormView.form_id == form_id).scalar()
+
+    return render_template('view_responses.html', form=form, response_data=response_data, gross_clicks=gross_clicks)
 
 @app.route('/form/<int:form_id>/responses/export-json')
 @login_required
 def export_responses_json(form_id):
+    if 'peppper.live'  in request.host:
+        abort(403)
     form = Form.query.get_or_404(form_id)
     if form.user_id != current_user.id:
         flash('You do not have permission to export these responses')
@@ -1096,6 +1284,8 @@ def export_responses_json(form_id):
 @app.route('/form/<int:form_id>/delete', methods=['POST'])
 @login_required
 def delete_form(form_id):
+    if 'peppper.live'  in request.host:
+        abort(403)
     try:
         # Get the form and verify ownership
         form = Form.query.get_or_404(form_id)
@@ -1253,6 +1443,8 @@ def extract_questions_from_pdf(pdf_path):
 @app.route('/form/<int:form_id>/update', methods=['POST'])
 @login_required
 def update_form(form_id):
+    if 'peppper.live'  in request.host:
+        abort(403)
     form = Form.query.get_or_404(form_id)
     if form.user_id != current_user.id:
         return jsonify({'error':'Unauthorized'}), 403
@@ -1398,6 +1590,8 @@ def update_form(form_id):
 @app.route('/postback/dashboard')
 @login_required
 def postback_dashboard():
+    if 'peppper.live'  in request.host:
+        abort(403)
     # Get all forms for this user
     forms = Form.query.filter_by(user_id=current_user.id).all()
     
@@ -1430,6 +1624,8 @@ def postback_dashboard():
 
 @app.route('/postback', methods=['GET', 'POST'])
 def receive_postback():
+    if 'peppper.live'  in request.host:
+        abort(403)
     # Get parameters from either GET or POST
     if request.method == 'GET':
         params = request.args.to_dict()
@@ -1443,9 +1639,65 @@ def receive_postback():
     user_id = params.get('user_id')
     status = params.get('status')
     payout = params.get('payout')
-    
+
+    # Check if this is an external form webhook
+    external_form_id = params.get('form_id')
+    external_secret = params.get('external_webhook_secret')
+
+    if external_form_id and external_secret:
+        form = Form.query.get(external_form_id)
+        if form and form.is_external and form.external_webhook_secret == external_secret:
+            # This is an authenticated external form submission
+            response = Response(
+                form_id=form.id,
+                submitted_at=datetime.utcnow(),
+                user_id=params.get('user_id'), # Capture user_id if available from external form
+                actual_ip=request.remote_addr,
+                conversion_ip=request.remote_addr,
+                # Set other response fields if available from external form data
+                # For example, if external form sends 'email' field that maps to 'user_email'
+                # company_id=form.company_id, # If external form has a way to associate with company
+                # utm_source=params.get('utm_source'),
+                # etc.
+            )
+            db.session.add(response)
+            db.session.flush() # Get response.id for answers
+
+            # Iterate through all parameters to find answers to questions
+            for key, value in params.items():
+                # Assuming external form fields might be named 'question_<id>' or 'answer_<text>'
+                # Or a direct mapping from external field name to internal question text
+                # This is a simplified example; a more robust mapping might be needed
+                if key.startswith('question_') or key.startswith('answer_'):
+                    # Attempt to find the question by ID (if key is 'question_<id>')
+                    try:
+                        question_id = int(key.split('_')[1])
+                        question = Question.query.get(question_id)
+                    except (ValueError, IndexError):
+                        question = None # Not a direct question_id, try to match by text or other means
+
+                    # If question not found by ID, try to find by question_text (simplified)
+                    if not question:
+                        # This part might need more sophisticated mapping based on actual external form setup
+                        question_text_guess = key.replace('question_', '').replace('answer_', '').replace('_', ' ').title()
+                        question = Question.query.filter_by(form_id=form.id, question_text=question_text_guess).first()
+
+                    if question:
+                        answer = Answer(
+                            response_id=response.id,
+                            question_id=question.id,
+                            answer_text=str(value)
+                        )
+                        db.session.add(answer)
+            
+            db.session.commit()
+            return jsonify({'status': 'success', 'message': 'External form response received and processed'}), 200
+        else:
+            # Form not found, not external, or secret mismatch
+            return jsonify({'status': 'error', 'message': 'Invalid external form ID or secret'}), 403
+
     if not tracking_id:
-        return jsonify({'status': 'error', 'message': 'Missing tracking_id'}), 400
+        return jsonify({'status': 'error', 'message': 'Missing tracking_id or external form parameters'}), 400
     
     # Try to convert payout to float if present
     if payout:
@@ -1555,11 +1807,14 @@ def share_form(form_id):
     host = request.host
     base_url = f"{proto}://{host}"
     
-    # Use pepper-ads.com domain for production
-    production_url = "http://pepper-ads.com"
+    # Use pepper-live.onrender.com domain for production
+    #production_url = "http://pepper-ads.com"
+    production_url = "peppper.live"
     
     # Create the base share URL with form and user parameters
-    base_share_url = f"{production_url}/?form_id={form.id}&user_id={form.user_id}"
+    # base_share_url = f"{production_url}/?form_id={form.id}&user_id={form.user_id}"
+    base_share_url = f"{production_url}/form/{form.id}?user_id={form.user_id}"
+
     
     # Generate postback URL for this form
     postback_url = generate_postback_url(form.id, form.user_id)
@@ -1567,26 +1822,34 @@ def share_form(form_id):
     # Detect current device type from request
     current_device = detect_device_type(request.user_agent.string)
     
-    # Create additional share URLs with UTM parameters for different platforms
-    # Now including device parameter
-    share_urls = {
-        'default': f"{base_share_url}&utm_source=default&utm_medium=referral&utm_campaign=form_share&device={current_device}",
-        'facebook': f"{base_share_url}&utm_source=facebook&utm_medium=social&utm_campaign=form_share&device={current_device}",
-        'twitter': f"{base_share_url}&utm_source=twitter&utm_medium=social&utm_campaign=form_share&device={current_device}",
-        'linkedin': f"{base_share_url}&utm_source=linkedin&utm_medium=social&utm_campaign=april_launch&device={current_device}",
-        'email': f"{base_share_url}&utm_source=email&utm_medium=email&utm_campaign=form_share&device={current_device}"
-    }
-    
-    # You can also create a generic UTM share URL if needed
-    utm_share_url = f"{base_share_url}&utm_source=other&utm_medium=referral&utm_campaign=form_share&device={current_device}"
-    
     # Create embed URLs for iframes
-    embed_url = f"{base_url}/form/{form.id}/embed"
-    
-    # Generate iframe HTML code
-    iframe_code = f'<iframe src="{embed_url}" width="100%" height="600" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>'
-    
-    return render_template('share_form.html', form=form, 
+    if form.is_external:
+        embed_url = ""
+        iframe_code = ""
+        share_url_for_template = form.external_url # For direct link
+        share_urls = {
+            'default': form.external_url,
+            'facebook': f"https://www.facebook.com/sharer/sharer.php?u={quote_plus(form.external_url)}",
+            'twitter': f"https://twitter.com/intent/tweet?text=Check out this external form: {quote_plus(form.external_url)}",
+            'linkedin': f"https://www.linkedin.com/sharing/share-offsite/?url={quote_plus(form.external_url)}",
+            'email': f"mailto:?subject=Check out this form&body=Here's a form for you: {form.external_url}"
+        }
+        utm_share_url = form.external_url
+    else:
+        embed_url = f"{base_url}/form/{form.id}/embed"
+        iframe_code = f'<iframe src="{embed_url}" width="100%" height="600" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>'
+        share_url_for_template = f"{base_share_url}&device={current_device}"
+        # Re-initialize share_urls with UTM parameters for internal forms
+        share_urls = {
+            'default': f"{base_share_url}&utm_source=default&utm_medium=referral&utm_campaign=form_share&device={current_device}",
+            'facebook': f"{base_share_url}&utm_source=facebook&utm_medium=social&utm_campaign=form_share&device={current_device}",
+            'twitter': f"{base_share_url}&utm_source=twitter&utm_medium=social&utm_campaign=form_share&device={current_device}",
+            'linkedin': f"{base_share_url}&utm_source=linkedin&utm_medium=social&utm_campaign=april_launch&device={current_device}",
+            'email': f"{base_share_url}&utm_source=email&utm_medium=email&utm_campaign=form_share&device={current_device}"
+        }
+        utm_share_url = f"{base_share_url}&utm_source=other&utm_medium=referral&utm_campaign=form_share&device={current_device}"
+
+    return render_template('share_form.html', form=form,
                           base_url=base_url,
                           production_url=production_url,
                           share_url=f"{base_share_url}&device={current_device}", 
@@ -1595,7 +1858,7 @@ def share_form(form_id):
                           current_device=current_device,
                           postback_url=postback_url,
                           embed_url=embed_url,
-                          iframe_code=iframe_code)  # Add embed URL and iframe code to template
+                          iframe_code=iframe_code)
 
 @app.route('/upload_pdf', methods=['GET', 'POST'])
 @login_required
@@ -3693,9 +3956,84 @@ def oliver_ads():
 @login_required
 @admin_required
 def admin_dashboard():
-    users = User.query.all()
-    forms = Form.query.all()
-    return render_template('admin_dashboard.html', users=users, forms=forms)
+    # Get filter parameters from request.args
+    user_email = request.args.get('user_email', '').strip()
+    form_title = request.args.get('form_title', '').strip()
+    form_status = request.args.get('form_status', 'all')
+
+    # Responses filter parameters
+    response_form_title = request.args.get('response_form_title', '').strip()
+    response_user_id = request.args.get('response_user_id', '').strip()
+    response_status = request.args.get('response_status', 'all')
+    response_start_date = request.args.get('response_start_date', '').strip()
+    response_end_date = request.args.get('response_end_date', '').strip()
+
+    # Filter users
+    users_query = User.query
+    if user_email:
+        users_query = users_query.filter(User.email.ilike(f"%{user_email}%"))
+    users = users_query.all()
+
+    # Filter forms
+    forms_query = Form.query
+    if form_title:
+        forms_query = forms_query.filter(Form.title.ilike(f"%{form_title}%"))
+    if form_status == 'open':
+        forms_query = forms_query.filter(Form.is_closed == False)
+    elif form_status == 'closed':
+        forms_query = forms_query.filter(Form.is_closed == True)
+    forms = forms_query.all()
+
+    # Get gross clicks for each form
+    form_gross_clicks = {}
+    for form in forms:
+        form_gross_clicks[form.id] = db.session.query(func.count(FormView.id)).filter(FormView.form_id == form.id).scalar()
+
+    # Filter responses
+    from sqlalchemy.orm import joinedload
+    from datetime import datetime
+    responses_query = Response.query.options(joinedload(Response.form))
+    if response_form_title:
+        responses_query = responses_query.join(Form).filter(Form.title.ilike(f"%{response_form_title}%"))
+    if response_user_id:
+        responses_query = responses_query.filter(Response.user_id.ilike(f"%{response_user_id}%"))
+    if response_status == 'success':
+        responses_query = responses_query.filter(Response.status == 'success')
+    elif response_status == 'pending':
+        responses_query = responses_query.filter(Response.status == 'pending')
+    # Date range filter
+    if response_start_date:
+        try:
+            start_dt = datetime.strptime(response_start_date, '%Y-%m-%d')
+            responses_query = responses_query.filter(Response.submitted_at >= start_dt)
+        except ValueError:
+            pass
+    if response_end_date:
+        try:
+            # Add 1 day to include the end date fully
+            end_dt = datetime.strptime(response_end_date, '%Y-%m-%d')
+            from datetime import timedelta
+            end_dt = end_dt + timedelta(days=1)
+            responses_query = responses_query.filter(Response.submitted_at < end_dt)
+        except ValueError:
+            pass
+    responses = responses_query.order_by(Response.submitted_at.desc()).all()
+
+    return render_template(
+        'admin_dashboard.html',
+        users=users,
+        forms=forms,
+        user_email=user_email,
+        form_title=form_title,
+        form_status=form_status,
+        responses=responses,
+        response_form_title=response_form_title,
+        response_user_id=response_user_id,
+        response_status=response_status,
+        response_start_date=response_start_date,
+        response_end_date=response_end_date,
+        form_gross_clicks=form_gross_clicks
+    )
 
 @app.route('/admin/user/<int:user_id>/toggle-admin', methods=['POST'])
 @login_required
@@ -3797,17 +4135,7 @@ def end_impersonation():
     else:
         flash('Original admin user not found. Please log in again.', 'danger')
         return redirect(url_for('login'))
-# @app.route('/postback_tester')
-# def postback_tester():
-#     postback_id = request.args.get('postback_id', type=int)
-#     postback_url = ""
 
-#     if postback_id:
-#         postback = Postback.query.get(postback_id)
-#         if postback:
-#             postback_url = postback.url  # Assumes your Postback model has a 'url' field
-            
-#     return render_template('postback_tester.html', postback_url=postback_url)
 
 @app.route('/proxy_postback', methods=['POST'])
 def proxy_postback():
@@ -4021,6 +4349,48 @@ def get_job_statuses():
         'status': job.status
     } for job in jobs])
 
+@app.route('/admin/response/<int:response_id>')
+@login_required
+@admin_required
+def admin_response_details(response_id):
+    response = Response.query.get_or_404(response_id)
+    form = Form.query.get(response.form_id)
+    # Try to get geolocation data
+    geo = Geolocation.query.filter_by(response_id=response.id).first()
+    # Try to get session_id and complete_id from UTM or other fields if available
+    session_id = getattr(response, 'session_id', None) or 'N/A'
+    complete_id = getattr(response, 'complete_id', None) or 'N/A'
+    ip_address = geo.ip_address if geo and geo.ip_address else 'N/A'
+    location = 'N/A'
+    if geo:
+        parts = [geo.city, geo.region, geo.country]
+        location = ', '.join([p for p in parts if p]) or 'N/A'
+    browser = getattr(response, 'browser', None) or 'N/A'
+    device = response.device_type or 'N/A'
+    date_time_clicked = getattr(response, 'date_time_clicked', None) or 'N/A'
+    date_time_completed = response.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if response.submitted_at else 'N/A'
+    time_spent = getattr(response, 'time_spent', None) or 'N/A'
+    time_per_question = getattr(response, 'time_per_question', None) or 'N/A'
+    # For now, mark as N/A if not present
+    data = {
+        'session_id': session_id,
+        'complete_id': complete_id,
+        'ip_address': ip_address,
+        'location': location,
+        'browser': browser,
+        'device': device,
+        'date_time_clicked': date_time_clicked,
+        'date_time_completed': date_time_completed,
+        'time_spent': time_spent,
+        'time_per_question': time_per_question,
+        'utm_source': response.utm_source or 'N/A',
+        'utm_medium': response.utm_medium or 'N/A',
+        'utm_campaign': response.utm_campaign or 'N/A',
+        'utm_content': response.utm_content or 'N/A',
+        'utm_term': response.utm_term or 'N/A',
+        'is_suspicious': response.is_suspicious # Add is_suspicious to data context
+    }
+    return render_template('admin_response_details.html', response=response, form=form, data=data)
 
 if __name__ == '__main__':
     with app.app_context():
@@ -4052,33 +4422,3 @@ if __name__ == '__main__':
 
     # app.run(debug=True)
     app.run(host='0.0.0.0', port=5000)
-# if __name__ == '__main__':
-#     with app.app_context():
-#         db.create_all()
-#         # Clear all existing templates and recreate
-#         FormTemplate.query.delete()
-#         db.session.commit()
-#         initialize_templates()  # Add this line to initialize templates
-
-#         # Ensure all existing users have a non-null is_admin value and set default admin
-#         for user in User.query.all():
-#             if user.is_admin is None:
-#                 user.is_admin = False
-#         db.session.commit()
-
-#         # Create default admin user if none exists with email 'admin@gmail.com'
-#         admin_user = User.query.filter_by(email='admin@gmail.com').first()
-#         if not admin_user:
-#             admin_user = User(email='admin@gmail.com', is_admin=True)
-#             admin_user.set_password('admin')
-#             db.session.add(admin_user)
-#             db.session.commit()
-#             print("Default admin user created: admin@gmail.com/admin")
-#         elif not admin_user.is_admin:
-#             admin_user.is_admin = True
-#             db.session.commit()
-#             print("Existing 'admin@gmail.com' user set to admin.")
-
-#     # Only run app manually if in local dev mode
-#     # app.run(debug=True)
-

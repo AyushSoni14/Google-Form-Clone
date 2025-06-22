@@ -20,14 +20,22 @@
                 <div class="input-group">
                     <div class="input-group-prepend">
                     </div>
-                    <input type="text" id="direct-link" class="form-control" readonly>
+                    {% if form.is_external %}
+                    <input type="text" id="direct-link" class="form-control" value="{{ form.external_url }}" readonly title="Direct Link">
+                    {% else %}
+                    <input type="text" id="direct-link" class="form-control" readonly title="Direct Link">
+                    {% endif %}
                     <div class="input-group-append">
                         <button class="btn btn-primary copy-btn" data-clipboard-target="#direct-link">
                             <i class="fas fa-copy"></i> Copy
                         </button>
                     </div>
                 </div>
+                {% if form.is_external %}
+                <small class="text-muted"><i class="fas fa-info-circle"></i> This form redirects to an external URL. Share this link directly.</small>
+                {% else %}
                 <small class="text-muted"><i class="fas fa-info-circle"></i> Share this link directly with your audience.</small>
+                {% endif %}
             </div>
             
             <h5 class="mt-4 mb-3"><i class="fas fa-share-alt"></i> Share on Social Media</h5>
@@ -37,7 +45,11 @@
                     <div class="card shadow-sm hover-card">
                         <div class="card-body text-center">
                             <h5><i class="fab fa-facebook fa-2x text-primary mb-3"></i><br>Facebook</h5>
-                            <input type="text" id="facebook-link" class="form-control mb-2" readonly>
+                            {% if form.is_external %}
+                            <input type="text" id="facebook-link" class="form-control mb-2" value="{{ form.external_url }}" readonly title="Facebook Share Link">
+                            {% else %}
+                            <input type="text" id="facebook-link" class="form-control mb-2" readonly title="Facebook Share Link">
+                            {% endif %}
                             <div class="btn-group d-flex">
                                 <button class="btn btn-outline-primary copy-btn" data-clipboard-target="#facebook-link">
                                     <i class="fas fa-copy"></i> Copy
@@ -54,7 +66,11 @@
                     <div class="card shadow-sm hover-card">
                         <div class="card-body text-center">
                             <h5><i class="fab fa-twitter fa-2x text-info mb-3"></i><br>Twitter</h5>
-                            <input type="text" id="twitter-link" class="form-control mb-2" readonly>
+                            {% if form.is_external %}
+                            <input type="text" id="twitter-link" class="form-control mb-2" value="{{ form.external_url }}" readonly title="Twitter Share Link">
+                            {% else %}
+                            <input type="text" id="twitter-link" class="form-control mb-2" readonly title="Twitter Share Link">
+                            {% endif %}
                             <div class="btn-group d-flex">
                                 <button class="btn btn-outline-info copy-btn" data-clipboard-target="#twitter-link">
                                     <i class="fas fa-copy"></i> Copy
@@ -71,7 +87,11 @@
                     <div class="card shadow-sm hover-card">
                         <div class="card-body text-center">
                             <h5><i class="fab fa-linkedin fa-2x text-primary mb-3"></i><br>LinkedIn</h5>
-                            <input type="text" id="linkedin-link" class="form-control mb-2" readonly>
+                            {% if form.is_external %}
+                            <input type="text" id="linkedin-link" class="form-control mb-2" value="{{ form.external_url }}" readonly title="LinkedIn Share Link">
+                            {% else %}
+                            <input type="text" id="linkedin-link" class="form-control mb-2" readonly title="LinkedIn Share Link">
+                            {% endif %}
                             <div class="btn-group d-flex">
                                 <button class="btn btn-outline-primary copy-btn" data-clipboard-target="#linkedin-link">
                                     <i class="fas fa-copy"></i> Copy
@@ -90,7 +110,11 @@
                 <div class="input-group">
                     <div class="input-group-prepend">
                     </div>
-                    <input type="text" id="email-link" class="form-control" readonly>
+                    {% if form.is_external %}
+                    <input type="text" id="email-link" class="form-control" value="{{ form.external_url }}" readonly title="Email Campaign Link">
+                    {% else %}
+                    <input type="text" id="email-link" class="form-control" readonly title="Email Campaign Link">
+                    {% endif %}
                     <div class="input-group-append">
                         <button class="btn btn-primary copy-btn" data-clipboard-target="#email-link">
                             <i class="fas fa-copy"></i> Copy
@@ -109,7 +133,7 @@
         <div class="card-body">
           <p>Use this URL to receive form submission data on external sites:</p>
           <div class="input-group mb-3">
-            <input type="text" class="form-control" id="postbackUrl" value="{{ postback_url }}" readonly>
+            <input type="text" class="form-control" id="postbackUrl" value="{{ postback_url }}" readonly title="Postback URL">
             <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('postbackUrl')">Copy</button>
           </div>
           <p class="mt-3 mb-0"><small class="text-muted">
@@ -119,6 +143,7 @@
     </div>
     
     <!-- Embed Form Section -->
+    {% if not form.is_external %}
     <div class="card mb-4 shadow-sm">
         <div class="card-header bg-primary text-white">
             <h5 class="mb-0"><i class="fas fa-code"></i> Embed Form</h5>
@@ -197,6 +222,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
     
     <div class="mt-4">
         <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
@@ -265,6 +291,8 @@ document.addEventListener('DOMContentLoaded', function() {
         'email-link': "{{ share_urls['email'] }}"
     };
     
+    // Only modify elements if the form is not external
+    {% if not form.is_external %}
     Object.entries(shareLinks).forEach(([id, url]) => {
         const element = document.getElementById(id);
         if (element) {
@@ -281,7 +309,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const linkedinUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(document.getElementById('linkedin-link').value)}`;
     document.getElementById('linkedin-share').href = linkedinUrl;
-    
+    {% else %}
+    // For external forms, ensure the social share buttons also use the external URL
+    const externalFormUrl = '{{ form.external_url }}';
+    document.getElementById('facebook-share').href = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(externalFormUrl)}`;
+    document.getElementById('twitter-share').href = `https://twitter.com/intent/tweet?text=Check out this external form: ${encodeURIComponent(externalFormUrl)}`;
+    document.getElementById('linkedin-share').href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(externalFormUrl)}`;
+    {% endif %}
+
     // Initialize clipboard.js
     const clipboard = new ClipboardJS('.copy-btn');
     
@@ -297,7 +332,8 @@ document.addEventListener('DOMContentLoaded', function() {
         e.clearSelection();
     });
     
-    // Handle iframe customization
+    // Handle iframe customization - only for internal forms
+    {% if not form.is_external %}
     const updateIframe = document.getElementById('update-iframe');
     if (updateIframe) {
         updateIframe.addEventListener('click', function() {
@@ -317,47 +353,29 @@ document.addEventListener('DOMContentLoaded', function() {
             previewIframe.frameBorder = border;
         });
     }
+    {% endif %}
     
     // Copy to clipboard function
     window.copyToClipboard = function(elementId) {
         const element = document.getElementById(elementId);
-        element.select();
-        document.execCommand('copy');
-        
-        const button = document.querySelector(`button[onclick="copyToClipboard('${elementId}')"]`);
-        const originalText = button.textContent;
-        button.textContent = 'Copied!';
-        
-        setTimeout(() => {
-            button.textContent = originalText;
-        }, 2000);
+        if (element) {
+            element.select();
+            element.setSelectionRange(0, 99999); // For mobile devices
+            document.execCommand('copy');
+            showCopySuccess();
+        }
     };
 });
+
+function showCopySuccess() {
+    const toast = document.getElementById('copySuccess');
+    if (toast) {
+        toast.style.display = 'block';
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 2000);
+    }
+}
 </script>
-<style>
-.hover-card {
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-.hover-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
-}
-.btn-group.d-flex .btn {
-    flex: 1;
-}
-.copy-btn {
-    position: relative;
-}
-.card {
-    border-radius: 8px;
-    overflow: hidden;
-}
-.card-header {
-    font-weight: 500;
-}
-.alert-success {
-    border-left: 5px solid #28a745;
-}
-</style>
 {% endblock %}
 {% endblock %}

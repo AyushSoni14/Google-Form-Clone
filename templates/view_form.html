@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ form.title }} - Google Forms Clone{% endblock %}
+{% block title %}{{ form.title }} -Clone{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
@@ -296,7 +296,7 @@
     </div>
   </div>
   
-  <form id="response-form" method="POST" action="{{ url_for('submit_form', form_id=form.id) }}" {% if is_closed %}class="opacity-75"{% endif %} >
+  <form id="response-form" method="POST" action="{{ url_for('submit_form', form_id=form.id) }}" {% if is_closed %}class="opacity-75"{% endif %} onsubmit="return handleSubmit(event)">
     {% for question in form.questions %}
       <div class="card mb-4 question-card" style="--animation-order: {{ loop.index }}" data-question-id="{{ question.id }}">
         <div class="card-body">
@@ -689,9 +689,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const qParams = url.searchParams.getAll("q");
     const userId = qParams[0] || '';
     const companyName = qParams[1] || '';
-    const sub1 = url.searchParams.get("sub1") || '';
-    const sts = url.searchParams.get("sts") || '';
-    const newAction = `/form/${formId}/submit?q=${encodeURIComponent(userId)}&q=${encodeURIComponent(companyName)}&sub1=${sub1}&sts=${sts}`;
+
+    const newAction = `/form/${formId}/submit?q=${encodeURIComponent(userId)}&q=${encodeURIComponent(companyName)}`;
     document.getElementById("response-form").action = newAction;
 });
 </script>
@@ -1331,6 +1330,25 @@ async function handleSubmit(event) {
     event.preventDefault();
     console.log("Step 0: Form submit intercepted");
 
+    // === Analytics Data Collection ===
+    // --- Session ID (persisted in sessionStorage) ---
+    if (!sessionStorage.getItem('session_id')) {
+        sessionStorage.setItem('session_id', 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
+    }
+    let sessionId = sessionStorage.getItem('session_id');
+
+    // --- Complete ID (unique per completion) ---
+    let completeId = 'comp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+    // --- Browser Info ---
+    let browser = navigator.userAgent;
+
+    // --- Timing ---
+    if (!window._formStart) window._formStart = Date.now();
+    let formStart = window._formStart;
+    let questionTimes = window._questionTimes || {};
+    // (If you want to track per-question time, you can move the tracking logic here)
+
     // Get reCAPTCHA response
     const recaptchaResponse = grecaptcha.getResponse();
     if (!recaptchaResponse) {
@@ -1392,6 +1410,15 @@ async function handleSubmit(event) {
     // Get form data
     const formData = new FormData(responseForm);
     
+    // --- Add analytics fields to formData ---
+    formData.append('session_id', sessionId);
+    formData.append('complete_id', completeId);
+    formData.append('browser', browser);
+    formData.append('date_time_clicked', new Date(formStart).toISOString());
+    formData.append('date_time_completed', new Date().toISOString());
+    formData.append('time_spent', ((Date.now() - formStart) / 1000).toFixed(2));
+    formData.append('time_per_question', JSON.stringify(questionTimes));
+
     // Add reCAPTCHA response to form data
     formData.append('g-recaptcha-response', recaptchaResponse);
     
@@ -1404,9 +1431,9 @@ async function handleSubmit(event) {
     
     // Add session ID to form data if present in URL
     const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get('session_id');
-    if (sessionId) {
-        formData.append('session_id', sessionId);
+    const sessionIdFromUrl = urlParams.get('session_id');
+    if (sessionIdFromUrl) {
+        formData.append('session_id', sessionIdFromUrl);
     }
 
     // Submit form via AJAX
@@ -1469,6 +1496,119 @@ async function handleSubmit(event) {
 
     return false;
 }
+</script>
+
+<!-- Add at the end of the file, right before the closing body tag -->
+<script>
+// === Analytics Data Collection Script ===
+document.addEventListener('DOMContentLoaded', function() {
+    // Only run if the form is present and not closed
+    const form = document.getElementById('response-form');
+    if (!form || form.classList.contains('opacity-75')) return;
+
+    // --- Session ID (persisted in sessionStorage) ---
+    if (!sessionStorage.getItem('session_id')) {
+        sessionStorage.setItem('session_id', 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
+    }
+    let sessionId = sessionStorage.getItem('session_id');
+
+    // --- Complete ID (unique per completion) ---
+    let completeId = 'comp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+    // --- Browser Info ---
+    let browser = navigator.userAgent;
+
+    // --- Timing ---
+    let formStart = Date.now();
+    let questionTimes = {};
+    let lastFocus = null;
+
+    // Track time per question
+    document.querySelectorAll('input, textarea, select').forEach(function(el) {
+        el.addEventListener('focus', function() {
+            lastFocus = {name: el.name, time: Date.now()};
+        });
+        el.addEventListener('blur', function() {
+            if (lastFocus && lastFocus.name === el.name) {
+                let spent = (Date.now() - lastFocus.time) / 1000;
+                questionTimes[el.name] = (questionTimes[el.name] || 0) + spent;
+                lastFocus = null;
+            }
+        });
+    });
+
+    form.addEventListener('submit', function(e) {
+        // --- Add hidden fields for analytics ---
+        function addHidden(name, value) {
+            let input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        }
+        addHidden('session_id', sessionId);
+        addHidden('complete_id', completeId);
+        addHidden('browser', browser);
+        addHidden('date_time_clicked', new Date(formStart).toISOString());
+        addHidden('date_time_completed', new Date().toISOString());
+        addHidden('time_spent', ((Date.now() - formStart) / 1000).toFixed(2));
+        addHidden('time_per_question', JSON.stringify(questionTimes));
+        // No need to preventDefault here, let the form submit
+    }, {once: true}); // Only add once per submission
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('response-form');
+    if (!form) return;
+    // List of UTM parameters to capture
+    const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+    const urlParams = new URLSearchParams(window.location.search);
+    utmParams.forEach(param => {
+        const value = urlParams.get(param);
+        if (value) {
+            let input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = param;
+            input.value = value;
+            form.appendChild(input);
+        }
+    });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add a debug section below the form
+    const form = document.getElementById('response-form');
+    if (!form) return;
+    let debugDiv = document.createElement('div');
+    debugDiv.id = 'hidden-fields-debug';
+    debugDiv.style = 'background:#f8f9fa;border:1px solid #ccc;padding:10px;margin:20px 0;';
+    debugDiv.innerHTML = '<strong>Debug: Hidden Fields</strong><div id="hidden-fields-list"></div>';
+    form.parentNode.insertBefore(debugDiv, form.nextSibling);
+
+    function updateHiddenFieldsList() {
+        const hiddenInputs = form.querySelectorAll('input[type="hidden"]');
+        let html = '<ul style="font-size:14px;">';
+        hiddenInputs.forEach(input => {
+            html += `<li><b>${input.name}</b>: <code>${input.value}</code></li>`;
+        });
+        html += '</ul>';
+        document.getElementById('hidden-fields-list').innerHTML = html;
+    }
+
+    // Initial update
+    updateHiddenFieldsList();
+
+    // Update whenever a hidden field is added
+    const observer = new MutationObserver(updateHiddenFieldsList);
+    observer.observe(form, { childList: true, subtree: true });
+
+    // Also update on input changes
+    form.addEventListener('input', updateHiddenFieldsList);
+});
 </script>
 
 </body>

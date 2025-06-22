@@ -29,6 +29,14 @@
                         </div>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h6 class="card-title">Gross Clicks</h6>
+                            <p class="card-text display-6">{{ gross_clicks }}</p>
+                        </div>
+                    </div>
+                </div>
                 {% if form.is_quiz %}
                 <div class="col-md-3">
                     <div class="card bg-light">
@@ -94,6 +102,7 @@
                     <thead>
                         <tr>
                             <th>Submission Date</th>
+                            <th>Company</th>
                             <th>User ID</th>
                             <th>Company Name</th>
                             <th>Form Status</th>
@@ -101,9 +110,20 @@
                             <th>Score</th>
                             <th>Status</th>
                             {% endif %}
+                            <th>UTM Source</th>
+                            <th>UTM Medium</th>
+                            <th>UTM Campaign</th>
+                            <th>UTM Content</th>
+                            <th>UTM Term</th>
+                            <th>Actual IP</th>
+                            <th>Session IP</th>
+                            <th>Conversion IP</th>
+                            <th>Suspicious</th>
+                            <th>Rejected</th>
                             {% for question in form.questions %}
                             <th>{{ question.question_text }}</th>
                             {% endfor %}
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -111,6 +131,7 @@
                         {% set response = data.response %}
                         <tr>
                             <td>{{ moment(response.submitted_at).format('YYYY-MM-DD HH:mm') }}</td>
+                            <td>{{ response.company.name if response.company else 'N/A' }}</td>
                             <td>{{ response.user_id if response.user_id else 'N/A' }}</td>
                             <td>{{ response.company_name if response.company_name else 'N/A' }}</td>
                             <td>{{ response.status if response.status else 'N/A' }}</td>
@@ -130,6 +151,28 @@
                                 {% endif %}
                             </td>
                             {% endif %}
+                            <td>{{ response.utm_source or 'N/A' }}</td>
+                            <td>{{ response.utm_medium or 'N/A' }}</td>
+                            <td>{{ response.utm_campaign or 'N/A' }}</td>
+                            <td>{{ response.utm_content or 'N/A' }}</td>
+                            <td>{{ response.utm_term or 'N/A' }}</td>
+                            <td>{{ response.actual_ip or 'N/A' }}</td>
+                            <td>{{ response.session_ip or 'N/A' }}</td>
+                            <td>{{ response.conversion_ip or 'N/A' }}</td>
+                            <td>
+                                {% if response.is_suspicious %}
+                                    <span class="badge bg-danger">Yes</span>
+                                {% else %}
+                                    <span class="badge bg-success">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if response.is_rejected %}
+                                    <span class="badge bg-danger">Yes</span>
+                                {% else %}
+                                    <span class="badge bg-success">No</span>
+                                {% endif %}
+                            </td>
                             {% for question in form.questions %}
                             <td>
                                 {% set answer = response.answers|selectattr('question_id', 'equalto', question.id)|first %}
@@ -140,6 +183,9 @@
                                 {% endif %}
                             </td>
                             {% endfor %}
+                            <td>
+                                <a href="{{ url_for('admin_response_details', response_id=response.id) }}" class="btn btn-sm btn-outline-info">View Details</a>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
