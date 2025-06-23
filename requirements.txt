@@ -15,4 +15,5 @@ gunicorn
 flask-migrate
 flask_moment
 pymysql
-pip install flask-cors
+flask-cors
+
