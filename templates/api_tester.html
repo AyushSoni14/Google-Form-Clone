@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}API Tester{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2>API Tester</h2>
+    <form id="apiTestForm" class="mb-3">
+        <div class="mb-2">
+            <label>API Domain:</label>
+            <input type="text" class="form-control" id="apiDomain" placeholder="https://your-domain.com">
+        </div>
+        <div class="mb-2">
+            <label>API Key:</label>
+            <input type="text" class="form-control" id="apiKey" placeholder="Your API Key">
+        </div>
+        <button type="submit" class="btn btn-primary">Test /api/forms</button>
+    </form>
+    <pre id="apiResult" style="background:#f8f9fa; padding:1em;"></pre>
+</div>
+<script>
+document.getElementById('apiTestForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const domain = document.getElementById('apiDomain').value.trim();
+    const key = document.getElementById('apiKey').value.trim();
+    const result = document.getElementById('apiResult');
+    result.textContent = 'Loading...';
+    fetch(domain + '/api/forms', {
+        headers: { 'X-API-Key': key }
+    })
+    .then(r => r.json().then(data => ({status: r.status, data})))
+    .then(res => {
+        result.textContent = 'Status: ' + res.status + '\n' + JSON.stringify(res.data, null, 2);
+    })
+    .catch(err => {
+        result.textContent = 'Error: ' + err;
+    });
+});
+</script>
+{% endblock %} 

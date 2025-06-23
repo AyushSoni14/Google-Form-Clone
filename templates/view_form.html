@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}{{ form.title }} -Clone{% endblock %}
+{% block title %}{{ form.title }} - Google Forms Clone{% endblock %}
+
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
@@ -646,9 +647,9 @@
 </div>
 
 <!-- Embed Button -->
-<button class="btn btn-success embed-button" id="embedButton" title="Get embed code">
+<!-- <button class="btn btn-success embed-button" id="embedButton" title="Get embed code">
   <i class="bi bi-code-slash"></i>
-</button>
+</button> -->
 
 <!-- Embed Modal -->
 <div id="embedModal" class="embed-modal">
@@ -1582,12 +1583,12 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function() {
     // Add a debug section below the form
     const form = document.getElementById('response-form');
-    if (!form) return;
-    let debugDiv = document.createElement('div');
-    debugDiv.id = 'hidden-fields-debug';
-    debugDiv.style = 'background:#f8f9fa;border:1px solid #ccc;padding:10px;margin:20px 0;';
-    debugDiv.innerHTML = '<strong>Debug: Hidden Fields</strong><div id="hidden-fields-list"></div>';
-    form.parentNode.insertBefore(debugDiv, form.nextSibling);
+    // if (!form) return;
+    // let debugDiv = document.createElement('div');
+    // debugDiv.id = 'hidden-fields-debug';
+    // debugDiv.style = 'background:#f8f9fa;border:1px solid #ccc;padding:10px;margin:20px 0;';
+    // debugDiv.innerHTML = '<strong>Debug: Hidden Fields</strong><div id="hidden-fields-list"></div>';
+    // form.parentNode.insertBefore(debugDiv, form.nextSibling);
 
     function updateHiddenFieldsList() {
         const hiddenInputs = form.querySelectorAll('input[type="hidden"]');

@@ -49,6 +49,39 @@
                         <small class="form-text text-muted">Specify countries that are blocked from accessing this form. E.g., CN, RU, IR. Leave empty for no restriction.</small>
                     </div>
 
+                    <div id="offerFields" style="display:none;">
+                        {% if current_user.is_authenticated and current_user.is_admin %}
+                        <div class="mb-3">
+                            <label for="offer_name" class="form-label">Offer Name</label>
+                            <input type="text" class="form-control" id="offer_name" name="offer_name">
+                        </div>
+                        <div class="mb-3">
+                            <label for="offer_description" class="form-label">Offer Description</label>
+                            <textarea class="form-control" id="offer_description" name="offer_description"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="offer_status" class="form-label">Offer Status</label>
+                            <input type="text" class="form-control" id="offer_status" name="offer_status">
+                        </div>
+                        <div class="mb-3">
+                            <label for="offer_credit" class="form-label">Credit</label>
+                            <input type="number" step="0.01" class="form-control" id="offer_credit" name="offer_credit">
+                        </div>
+                        <div class="mb-3">
+                            <label for="offer_preview_url" class="form-label">Preview URL</label>
+                            <input type="url" class="form-control" id="offer_preview_url" name="offer_preview_url">
+                        </div>
+                        <div class="mb-3">
+                            <label for="offer_country" class="form-label">Country (comma-separated ISO codes)</label>
+                            <input type="text" class="form-control" id="offer_country" name="offer_country">
+                        </div>
+                        <div class="mb-3">
+                            <label for="offer_date" class="form-label">Offer Date</label>
+                            <input type="date" class="form-control" id="offer_date" name="offer_date">
+                        </div>
+                        {% endif %}
+                    </div>
+
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
                         <button type="submit" id="submitButton" class="btn btn-primary">Create Form</button>
@@ -85,6 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const requiresConsentGroup = document.getElementById('requires_consent').closest('.mb-3.form-check'); // Parent div of requires_consent checkbox
     const allowedCountriesGroup = document.getElementById('allowedCountriesGroup');
     const blockedCountriesGroup = document.getElementById('blockedCountriesGroup');
+    const offerFields = document.getElementById('offerFields');
 
     function toggleExternalFormFields() {
         if (isExternalCheckbox.checked) {
@@ -95,6 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
             blockedCountriesGroup.style.display = 'none';
             // Make external_url required when visible
             document.getElementById('external_url').setAttribute('required', 'required');
+            if (offerFields) offerFields.style.display = 'block';
         } else {
             externalUrlGroup.style.display = 'none';
             scoreGroup.style.display = 'block';
@@ -103,6 +138,7 @@ document.addEventListener('DOMContentLoaded', function() {
             blockedCountriesGroup.style.display = 'block';
             // Remove required attribute when hidden
             document.getElementById('external_url').removeAttribute('required');
+            if (offerFields) offerFields.style.display = 'none';
         }
     }
 

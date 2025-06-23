@@ -295,8 +295,10 @@ document.addEventListener('DOMContentLoaded', function() {
     {% if not form.is_external %}
     Object.entries(shareLinks).forEach(([id, url]) => {
         const element = document.getElementById(id);
-        if (element) {
-            element.value = addTrackingParams(url);
+         if (id === 'direct-link') {
+            element.value = url;  // no tracking params
+        } else {
+            element.value = addTrackingParams(url);  // with tracking params
         }
     });
     

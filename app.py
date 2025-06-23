@@ -32,8 +32,12 @@ from datetime import datetime
 import re
 from sqlalchemy import func
 from datetime import timedelta
+import secrets
+from flask_cors import CORS
 import threading
 from flask import abort
+
+
 # Decorator for admin access
 def admin_required(f):
     @wraps(f)
@@ -49,6 +53,7 @@ load_dotenv()
 
 
 app = Flask(__name__)
+CORS(app)
 app.config['SECRET_KEY'] = os.urandom(24)
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -57,9 +62,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
     "mysql+pymysql://himanshu:Ayushsoni14@pepperads.mysql.database.azure.com/pepeleads"
     f"?ssl_ca={os.path.join(basedir, 'certs', 'DigiCertGlobalRootCA.crt.pem')}"
 )
-
-
-
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -68,6 +70,7 @@ app.config['RECAPTCHA_SITE_KEY'] = os.getenv('RECAPTCHA_SITE_KEY')
 app.config['RECAPTCHA_SECRET_KEY'] = os.getenv('RECAPTCHA_SECRET_KEY')
 app.config['RECAPTCHA_VERIFY_URL'] = 'https://www.google.com/recaptcha/api/siteverify'
 app.jinja_env.filters['fromjson'] = json.loads
+
 
 # Configure Google Generative AI with HTTP transport
 try:
@@ -143,7 +146,7 @@ class Postback(db.Model):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128))
+    password_hash = db.Column(db.String(512))
     is_admin = db.Column(db.Boolean, default=False)
     forms = db.relationship('Form', backref='author', lazy=True)
     postbacks = db.relationship('Postback', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -182,6 +185,13 @@ class Form(db.Model):
     external_webhook_secret = db.Column(db.String(100), nullable=True, unique=True) # Secret for external form webhooks
     allowed_countries = db.Column(db.Text, nullable=True) # JSON string of allowed country codes (e.g., ["US", "CA"])
     blocked_countries = db.Column(db.Text, nullable=True) # JSON string of blocked country codes (e.g., ["CN", "RU"])
+    offer_name = db.Column(db.String(255), nullable=True)
+    offer_description = db.Column(db.Text, nullable=True)
+    offer_status = db.Column(db.String(50), nullable=True)
+    offer_credit = db.Column(db.Float, nullable=True)
+    offer_preview_url = db.Column(db.String(500), nullable=True)
+    offer_country = db.Column(db.String(255), nullable=True)
+    offer_date = db.Column(db.Date, nullable=True)
 
 class SubQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -333,6 +343,7 @@ class Response(db.Model):
     sub1 = db.Column(db.String(100), nullable=True)
     sts = db.Column(db.String(100), nullable=True)
     form_score = db.Column(db.Integer, default=100)
+
 class Answer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     response_id = db.Column(db.Integer, db.ForeignKey('response.id'), nullable=False)
@@ -687,6 +698,21 @@ def create_form():
         # Clear referral from session after form creation
         session.pop('referral_company_id', None)
         
+        # Save offer metadata fields if admin and external form
+        if current_user.is_authenticated and current_user.is_admin and is_external:
+            form.offer_name = request.form.get('offer_name')
+            form.offer_description = request.form.get('offer_description')
+            form.offer_status = request.form.get('offer_status')
+            form.offer_credit = request.form.get('offer_credit')
+            form.offer_preview_url = request.form.get('offer_preview_url')
+            form.offer_country = request.form.get('offer_country')
+            offer_date_str = request.form.get('offer_date')
+            if offer_date_str:
+                try:
+                    form.offer_date = datetime.strptime(offer_date_str, '%Y-%m-%d').date()
+                except Exception:
+                    form.offer_date = None
+        
         return redirect(url_for('edit_form', form_id=form.id))
         
     return render_template('create_form.html')
@@ -804,8 +830,6 @@ def view_form(form_id):
 @app.route('/form/<int:form_id>/edit')
 @login_required
 def edit_form(form_id):
-    if 'peppper.live'  in request.host:
-        abort(403)
     form = Form.query.get_or_404(form_id)
     if form.user_id != current_user.id:
         return redirect(url_for('dashboard'))
@@ -997,6 +1021,7 @@ def trigger_postbacks(response_id):
 @app.route('/form/<int:form_id>/submit', methods=['POST'])
 @rate_limit(limit=5, per=300)  # 5 requests per 5 minutes
 def submit_form(form_id):
+    print("IN form/sumbit")
     form = Form.query.get_or_404(form_id)
     
     # Check if form is closed
@@ -1028,34 +1053,7 @@ def submit_form(form_id):
     print("UTM Campaign:", request.form.get('utm_campaign'))
     print("UTM Content:", request.form.get('utm_content'))
     print("UTM Term:", request.form.get('utm_term'))
-    print("---- Debug: Response Object Values ----")
-    print("form_id:", form_id)
-    print("company_id:", form.company_id)
-    print("user_id:", user_id)
-    print("company_name:", company_name)
-    print("utm_source:", request.form.get('utm_source'))
-    print("utm_medium:", request.form.get('utm_medium'))
-    print("utm_campaign:", request.form.get('utm_campaign'))
-    print("utm_content:", request.form.get('utm_content'))
-    print("utm_term:", request.form.get('utm_term'))
-    print("device_type:", device_type)
-    print("has_consent:", True)
-    print("status:", "pending" if form.merged_url else "success")
-    print("session_id:", request.form.get('session_id'))
-    print("complete_id:", request.form.get('complete_id'))
-    print("browser:", request.form.get('browser'))
-    print("date_time_clicked:", request.form.get('date_time_clicked'))
-    print("date_time_completed:", request.form.get('date_time_completed'))
-    print("time_spent:", request.form.get('time_spent'))
-    print("time_per_question:", request.form.get('time_per_question'))
-    print("actual_ip:", request.remote_addr)
-    print("session_ip:", session.get('session_ip'))
-    print("conversion_ip:", request.remote_addr)
-    print("sub1:", sub1)
-    print("sts:", sts)
-    print("form_score:", form.score)
-    print("---------------------------------------")
-
+    
     # Create response object
     response = Response(
         form_id=form_id,
@@ -1083,7 +1081,7 @@ def submit_form(form_id):
         conversion_ip=request.remote_addr,
         sub1=sub1,
         sts=sts,
-        form_score= form.score,
+        form_score= form.score
     )
 
     # Get geolocation data
@@ -1224,8 +1222,6 @@ def form_submitted(form_id):
 @app.route('/form/<int:form_id>/responses')
 @login_required
 def view_responses(form_id):
-    if 'peppper.live'  in request.host:
-        abort(403)
     form = Form.query.get_or_404(form_id)
     if not (current_user.is_admin or form.user_id == current_user.id):
         flash('You do not have permission to view these responses')
@@ -1248,8 +1244,6 @@ def view_responses(form_id):
 @app.route('/form/<int:form_id>/responses/export-json')
 @login_required
 def export_responses_json(form_id):
-    if 'peppper.live'  in request.host:
-        abort(403)
     form = Form.query.get_or_404(form_id)
     if form.user_id != current_user.id:
         flash('You do not have permission to export these responses')
@@ -1284,8 +1278,6 @@ def export_responses_json(form_id):
 @app.route('/form/<int:form_id>/delete', methods=['POST'])
 @login_required
 def delete_form(form_id):
-    if 'peppper.live'  in request.host:
-        abort(403)
     try:
         # Get the form and verify ownership
         form = Form.query.get_or_404(form_id)
@@ -1443,8 +1435,6 @@ def extract_questions_from_pdf(pdf_path):
 @app.route('/form/<int:form_id>/update', methods=['POST'])
 @login_required
 def update_form(form_id):
-    if 'peppper.live'  in request.host:
-        abort(403)
     form = Form.query.get_or_404(form_id)
     if form.user_id != current_user.id:
         return jsonify({'error':'Unauthorized'}), 403
@@ -1590,8 +1580,6 @@ def update_form(form_id):
 @app.route('/postback/dashboard')
 @login_required
 def postback_dashboard():
-    if 'peppper.live'  in request.host:
-        abort(403)
     # Get all forms for this user
     forms = Form.query.filter_by(user_id=current_user.id).all()
     
@@ -1639,7 +1627,7 @@ def receive_postback():
     user_id = params.get('user_id')
     status = params.get('status')
     payout = params.get('payout')
-
+    
     # Check if this is an external form webhook
     external_form_id = params.get('form_id')
     external_secret = params.get('external_webhook_secret')
@@ -1695,7 +1683,7 @@ def receive_postback():
         else:
             # Form not found, not external, or secret mismatch
             return jsonify({'status': 'error', 'message': 'Invalid external form ID or secret'}), 403
-
+    
     if not tracking_id:
         return jsonify({'status': 'error', 'message': 'Missing tracking_id or external form parameters'}), 400
     
@@ -1809,12 +1797,10 @@ def share_form(form_id):
     
     # Use pepper-live.onrender.com domain for production
     #production_url = "http://pepper-ads.com"
-    production_url = "peppper.live"
+    production_url = "http://peppper.live"
     
     # Create the base share URL with form and user parameters
-    # base_share_url = f"{production_url}/?form_id={form.id}&user_id={form.user_id}"
-    base_share_url = f"{production_url}/form/{form.id}?user_id={form.user_id}"
-
+    base_share_url = f"{production_url}/form/{form.id}"
     
     # Generate postback URL for this form
     postback_url = generate_postback_url(form.id, form.user_id)
@@ -1838,21 +1824,21 @@ def share_form(form_id):
     else:
         embed_url = f"{base_url}/form/{form.id}/embed"
         iframe_code = f'<iframe src="{embed_url}" width="100%" height="600" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>'
-        share_url_for_template = f"{base_share_url}&device={current_device}"
+        share_url_for_template = f"{base_share_url}"
         # Re-initialize share_urls with UTM parameters for internal forms
-        share_urls = {
-            'default': f"{base_share_url}&utm_source=default&utm_medium=referral&utm_campaign=form_share&device={current_device}",
-            'facebook': f"{base_share_url}&utm_source=facebook&utm_medium=social&utm_campaign=form_share&device={current_device}",
-            'twitter': f"{base_share_url}&utm_source=twitter&utm_medium=social&utm_campaign=form_share&device={current_device}",
-            'linkedin': f"{base_share_url}&utm_source=linkedin&utm_medium=social&utm_campaign=april_launch&device={current_device}",
-            'email': f"{base_share_url}&utm_source=email&utm_medium=email&utm_campaign=form_share&device={current_device}"
-        }
-        utm_share_url = f"{base_share_url}&utm_source=other&utm_medium=referral&utm_campaign=form_share&device={current_device}"
-
-    return render_template('share_form.html', form=form,
+    share_urls = {
+        'default': f"{base_share_url}?utm_source=default&utm_medium=referral&utm_campaign=form_share&device={current_device}",
+        'facebook': f"{base_share_url}?utm_source=facebook&utm_medium=social&utm_campaign=form_share&device={current_device}",
+        'twitter': f"{base_share_url}?utm_source=twitter&utm_medium=social&utm_campaign=form_share&device={current_device}",
+        'linkedin': f"{base_share_url}?utm_source=linkedin&utm_medium=social&utm_campaign=april_launch&device={current_device}",
+        'email': f"{base_share_url}?utm_source=email&utm_medium=email&utm_campaign=form_share&device={current_device}"
+    }
+    utm_share_url = f"{base_share_url}&utm_source=other&utm_medium=referral&utm_campaign=form_share&device={current_device}"
+    
+    return render_template('share_form.html', form=form, 
                           base_url=base_url,
                           production_url=production_url,
-                          share_url=f"{base_share_url}&device={current_device}", 
+                          share_url=f"{base_share_url}", 
                           share_urls=share_urls,
                           utm_share_url=utm_share_url,
                           current_device=current_device,
@@ -4184,6 +4170,193 @@ from flask import request, render_template
 #     </ul>
 #     """
 #     return render_template_string(html, logs=logs)
+
+
+
+
+@app.route('/admin/response/<int:response_id>')
+@login_required
+@admin_required
+def admin_response_details(response_id):
+    response = Response.query.get_or_404(response_id)
+    form = Form.query.get(response.form_id)
+    # Try to get geolocation data
+    geo = Geolocation.query.filter_by(response_id=response.id).first()
+    # Try to get session_id and complete_id from UTM or other fields if available
+    session_id = getattr(response, 'session_id', None) or 'N/A'
+    complete_id = getattr(response, 'complete_id', None) or 'N/A'
+    ip_address = geo.ip_address if geo and geo.ip_address else 'N/A'
+    location = 'N/A'
+    if geo:
+        parts = [geo.city, geo.region, geo.country]
+        location = ', '.join([p for p in parts if p]) or 'N/A'
+    browser = getattr(response, 'browser', None) or 'N/A'
+    device = response.device_type or 'N/A'
+    date_time_clicked = getattr(response, 'date_time_clicked', None) or 'N/A'
+    date_time_completed = response.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if response.submitted_at else 'N/A'
+    time_spent = getattr(response, 'time_spent', None) or 'N/A'
+    time_per_question = getattr(response, 'time_per_question', None) or 'N/A'
+    # For now, mark as N/A if not present
+    data = {
+        'session_id': session_id,
+        'complete_id': complete_id,
+        'ip_address': ip_address,
+        'location': location,
+        'browser': browser,
+        'device': device,
+        'date_time_clicked': date_time_clicked,
+        'date_time_completed': date_time_completed,
+        'time_spent': time_spent,
+        'time_per_question': time_per_question,
+        'utm_source': response.utm_source or 'N/A',
+        'utm_medium': response.utm_medium or 'N/A',
+        'utm_campaign': response.utm_campaign or 'N/A',
+        'utm_content': response.utm_content or 'N/A',
+        'utm_term': response.utm_term or 'N/A',
+        'is_suspicious': response.is_suspicious # Add is_suspicious to data context
+    }
+    return render_template('admin_response_details.html', response=response, form=form, data=data)
+
+class ApiKey(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(64), unique=True, nullable=False, default=lambda: secrets.token_hex(32))
+    description = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+
+@app.route('/admin/api-keys', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_api_keys():
+    if request.method == 'POST':
+        description = request.form.get('description')
+        new_key = ApiKey(description=description)
+        db.session.add(new_key)
+        db.session.commit()
+        flash('API key created!', 'success')
+        return redirect(url_for('manage_api_keys'))
+    keys = ApiKey.query.all()
+    return render_template('admin_api_keys.html', keys=keys)
+
+def require_api_key(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        api_key = request.headers.get('X-API-Key')  # Updated header name
+        if not api_key or not ApiKey.query.filter_by(key=api_key, is_active=True).first():
+            return jsonify({'error': 'Invalid or missing API key'}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route('/api/forms/summary', methods=['GET'])
+@require_api_key
+def api_forms_summary():
+    total_forms = Form.query.count()
+    types = {
+        'internal': Form.query.filter_by(is_external=False).count(),
+        'external': Form.query.filter_by(is_external=True).count(),
+        'quiz': Form.query.filter_by(is_quiz=True).count(),
+    }
+    return jsonify({
+        'total_forms': total_forms,
+        'form_types': types
+    })
+
+@app.route('/api/forms', methods=['GET'])
+@require_api_key
+def api_get_forms():
+    form_type = request.args.get('type')
+    active = request.args.get('active')
+    query = Form.query
+
+    if form_type == 'ai_generated':
+        query = query.filter(Form.description.ilike('%ai%'))  # Adjust as per your AI form logic
+    elif form_type == 'external':
+        query = query.filter(Form.is_external == True)
+
+    if active == 'true':
+        query = query.filter(Form.is_closed == False)
+    elif active == 'false':
+        query = query.filter(Form.is_closed == True)
+
+    forms = query.all()
+    return jsonify([
+        {
+            'id': f.id,
+            'title': f.title,
+            'is_external': f.is_external,
+            'is_closed': f.is_closed,
+            'created_at': f.created_at.isoformat()
+        } for f in forms
+    ])
+
+@app.route('/api/forms/<int:form_id>', methods=['GET'])
+@require_api_key
+def api_get_form_detail(form_id):
+    form = Form.query.get_or_404(form_id)
+    return jsonify({
+        'id': form.id,
+        'title': form.title,
+        'description': form.description,
+        'is_external': form.is_external,
+        'is_closed': form.is_closed,
+        'created_at': form.created_at.isoformat(),
+        'questions': [
+            {
+                'id': q.id,
+                'text': q.question_text,
+                'type': q.question_type,
+                'required': q.required
+            } for q in form.questions
+        ]
+    })
+
+@app.route('/api/stats', methods=['GET'])
+@require_api_key
+def api_get_stats():
+    total = Form.query.count()
+    external = Form.query.filter_by(is_external=True).count()
+    ai_generated = Form.query.filter(Form.description.ilike('%ai%')).count()  # Adjust as needed
+    open_forms = Form.query.filter_by(is_closed=False).count()
+    closed_forms = Form.query.filter_by(is_closed=True).count()
+    return jsonify({
+        'total_forms': total,
+        'external_forms': external,
+        'ai_generated_forms': ai_generated,
+        'open_forms': open_forms,
+        'closed_forms': closed_forms
+    })
+
+@app.route('/api-tester', methods=['GET'])
+def api_tester():
+    return render_template('api_tester.html')
+
+@app.route('/api-docs', methods=['GET'])
+def api_docs():
+    return render_template('api_docs.html')
+
+@app.route('/admin/proxy-api', methods=['POST'])
+@login_required
+@admin_required
+def admin_proxy_api():
+    data = request.json
+    url = data.get('url')
+    method = data.get('method', 'GET')
+    headers = data.get('headers', {})
+    params = data.get('params', {})
+    body = data.get('body', None)
+
+    try:
+        resp = requests.request(
+            method=method,
+            url=url,
+            headers=headers,
+            params=params,
+            data=body
+        )
+        # Return raw text, status, and headers
+        return resp.text, resp.status_code, {'Content-Type': resp.headers.get('Content-Type', 'text/plain')}
+    except Exception as e:
+        return str(e), 500, {'Content-Type': 'text/plain'}
 @app.route('/postbacks/delete/<int:postback_id>', methods=['POST'])
 @login_required
 def delete_postback(postback_id):
@@ -4348,50 +4521,6 @@ def get_job_statuses():
         'id': job.id, 
         'status': job.status
     } for job in jobs])
-
-@app.route('/admin/response/<int:response_id>')
-@login_required
-@admin_required
-def admin_response_details(response_id):
-    response = Response.query.get_or_404(response_id)
-    form = Form.query.get(response.form_id)
-    # Try to get geolocation data
-    geo = Geolocation.query.filter_by(response_id=response.id).first()
-    # Try to get session_id and complete_id from UTM or other fields if available
-    session_id = getattr(response, 'session_id', None) or 'N/A'
-    complete_id = getattr(response, 'complete_id', None) or 'N/A'
-    ip_address = geo.ip_address if geo and geo.ip_address else 'N/A'
-    location = 'N/A'
-    if geo:
-        parts = [geo.city, geo.region, geo.country]
-        location = ', '.join([p for p in parts if p]) or 'N/A'
-    browser = getattr(response, 'browser', None) or 'N/A'
-    device = response.device_type or 'N/A'
-    date_time_clicked = getattr(response, 'date_time_clicked', None) or 'N/A'
-    date_time_completed = response.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if response.submitted_at else 'N/A'
-    time_spent = getattr(response, 'time_spent', None) or 'N/A'
-    time_per_question = getattr(response, 'time_per_question', None) or 'N/A'
-    # For now, mark as N/A if not present
-    data = {
-        'session_id': session_id,
-        'complete_id': complete_id,
-        'ip_address': ip_address,
-        'location': location,
-        'browser': browser,
-        'device': device,
-        'date_time_clicked': date_time_clicked,
-        'date_time_completed': date_time_completed,
-        'time_spent': time_spent,
-        'time_per_question': time_per_question,
-        'utm_source': response.utm_source or 'N/A',
-        'utm_medium': response.utm_medium or 'N/A',
-        'utm_campaign': response.utm_campaign or 'N/A',
-        'utm_content': response.utm_content or 'N/A',
-        'utm_term': response.utm_term or 'N/A',
-        'is_suspicious': response.is_suspicious # Add is_suspicious to data context
-    }
-    return render_template('admin_response_details.html', response=response, form=form, data=data)
-
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()

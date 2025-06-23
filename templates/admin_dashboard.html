@@ -211,6 +211,150 @@
                 </table>
             </div>
         </div>
+
+        <div class="tab-pane fade" id="api-tools" role="tabpanel" aria-labelledby="api-tools-tab">
+            <h2>API Tester</h2>
+            <div class="card">
+                <div class="card-body">
+                    <form id="adminApiTestForm">
+                        <div class="mb-3">
+                            <label for="apiMethod" class="form-label">HTTP Method</label>
+                            <select class="form-select" id="apiMethod">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="DELETE">DELETE</option>
+                                <option value="PATCH">PATCH</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="apiUrl" class="form-label">API Endpoint URL</label>
+                            <input type="text" class="form-control" id="apiUrl" placeholder="e.g., {{ request.url_root }}api/stats">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Query Parameters</label>
+                            <div id="paramsList"></div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addParamRow()">+ Add Parameter</button>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Headers</label>
+                            <div id="headersList"></div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addHeaderRow()">+ Add Header</button>
+                        </div>
+                        <div class="mb-3" id="bodyGroup" style="display:none;">
+                            <label for="apiBody" class="form-label">Request Body (JSON)</label>
+                            <textarea class="form-control" id="apiBody" rows="4" placeholder="{\n  \"key\": \"value\"\n}"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Send Request</button>
+                    </form>
+                </div>
+                <div class="card-footer">
+                    <h5 class="card-title">Response</h5>
+                    <pre id="apiResponseOutput" class="bg-dark text-white p-3 rounded">API response will be shown here...</pre>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function addParamRow(key = '', value = '') {
+    const paramsList = document.getElementById('paramsList');
+    const row = document.createElement('div');
+    row.className = 'row g-1 mb-1';
+    row.innerHTML = `
+        <div class="col"><input type="text" class="form-control form-control-sm param-key" placeholder="Key" value="${key}"></div>
+        <div class="col"><input type="text" class="form-control form-control-sm param-value" placeholder="Value" value="${value}"></div>
+        <div class="col-auto"><button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.parentElement.remove()">&times;</button></div>
+    `;
+    paramsList.appendChild(row);
+}
+function addHeaderRow(key = '', value = '') {
+    const headersList = document.getElementById('headersList');
+    const row = document.createElement('div');
+    row.className = 'row g-1 mb-1';
+    row.innerHTML = `
+        <div class="col"><input type="text" class="form-control form-control-sm header-key" placeholder="Key" value="${key}"></div>
+        <div class="col"><input type="text" class="form-control form-control-sm header-value" placeholder="Value" value="${value}"></div>
+        <div class="col-auto"><button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.parentElement.remove()">&times;</button></div>
+    `;
+    headersList.appendChild(row);
+}
+// Add default X-API-Key header row
+window.addEventListener('DOMContentLoaded', function() {
+    addHeaderRow('X-API-Key', '');
+    addParamRow();
+    document.getElementById('apiMethod').addEventListener('change', function() {
+        const bodyGroup = document.getElementById('bodyGroup');
+        if (['POST','PUT','PATCH'].includes(this.value)) {
+            bodyGroup.style.display = 'block';
+        } else {
+            bodyGroup.style.display = 'none';
+        }
+    });
+});
+document.getElementById('adminApiTestForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const method = document.getElementById('apiMethod').value;
+    let url = document.getElementById('apiUrl').value.trim();
+    const outputElement = document.getElementById('apiResponseOutput');
+    // Collect query params
+    const params = {};
+    Array.from(document.querySelectorAll('.param-key')).forEach((el, i) => {
+        const key = el.value;
+        const value = document.querySelectorAll('.param-value')[i].value;
+        if (key) params[key] = value;
+    });
+    // Collect headers
+    const headers = {};
+    Array.from(document.querySelectorAll('.header-key')).forEach((el, i) => {
+        const key = el.value;
+        const value = document.querySelectorAll('.header-value')[i].value;
+        if (key) headers[key] = value;
+    });
+    // Collect body
+    let body = undefined;
+    if (['POST','PUT','PATCH'].includes(method)) {
+        const bodyText = document.getElementById('apiBody').value.trim();
+        if (bodyText) {
+            try {
+                body = JSON.stringify(JSON.parse(bodyText));
+            } catch (e) {
+                outputElement.textContent = 'Invalid JSON in request body.';
+                return;
+            }
+        }
+    }
+    outputElement.textContent = 'Fetching...';
+    fetch('/admin/proxy-api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            url: url,
+            method: method,
+            headers: headers,
+            params: params,
+            body: body
+        })
+    })
+    .then(response => {
+        const status = response.status;
+        const statusText = response.statusText;
+        return response.text().then(text => {
+            let data;
+            try { data = JSON.parse(text); } catch { data = text; }
+            return { status, statusText, data };
+        });
+    })
+    .then(result => {
+        outputElement.textContent = `Status: ${result.status} ${result.statusText}\n\n`;
+        outputElement.textContent += typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
+    })
+    .catch(error => {
+        outputElement.textContent = `Error: ${error.message}\n\nPlease check the URL and ensure the API server is running.`;
+    });
+});
+</script>
 {% endblock %} 
