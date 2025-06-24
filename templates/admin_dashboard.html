@@ -250,12 +250,63 @@
                 </div>
                 <div class="card-footer">
                     <h5 class="card-title">Response</h5>
-                    <pre id="apiResponseOutput" class="bg-dark text-white p-3 rounded">API response will be shown here...</pre>
+                    <ul class="nav nav-tabs mb-2" id="adminApiTabs" role="tablist">
+                      <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="admin-pretty-tab" data-bs-toggle="tab" type="button" role="tab">Pretty</button>
+                      </li>
+                      <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="admin-raw-tab" data-bs-toggle="tab" type="button" role="tab">Raw</button>
+                      </li>
+                    </ul>
+                    <div id="adminPrettyResult" style="display:block;"></div>
+                    <pre id="apiResponseOutput" class="bg-dark text-white p-3 rounded" style="display:none;">API response will be shown here...</pre>
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+<style>
+    .offer-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: 1px solid #e9ecef;
+    }
+    .offer-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15)!important;
+    }
+    .offer-card .card-img-top {
+        height: 150px;
+        object-fit: cover;
+        background-color: #f8f9fa;
+    }
+    .offer-card .card-body {
+        font-size: 0.9rem;
+    }
+    .offer-card .card-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+    .details-list .list-group-item {
+        padding: 0.5rem 0.75rem;
+        border: none;
+        background: none;
+    }
+    .details-list i {
+        width: 20px;
+        text-align: center;
+        margin-right: 8px;
+        color: #6c757d;
+    }
+    .events-table th, .events-table td {
+        font-size: 0.85rem;
+    }
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -295,11 +346,97 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+function renderPretty(data) {
+    // Helper to render a single offer card
+    function renderCard(item, idx) {
+        const offer = item.offer || {};
+        const payout = item.payout || {};
+        const events = item.events || [];
+        const devices = item.devices || [];
+
+        const eventsTable = events.length > 0 ? `
+            <h6 class="mt-3">Events</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered events-table">
+                    <thead class="table-light"><tr><th>Name</th><th>Payout</th></tr></thead>
+                    <tbody>
+                        ${events.map(e => `<tr><td>${e.name || ''}</td><td>${e.payout || ''}</td></tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : '';
+
+        const description = offer.description ? `
+            <p>
+                <a class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" href="#desc-${idx}" role="button">
+                    Toggle Description
+                </a>
+            </p>
+            <div class="collapse" id="desc-${idx}">
+                <div class="card card-body" style="font-size: 0.8rem;">
+                    ${offer.description}
+                </div>
+            </div>
+        ` : '';
+
+        return `
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100 offer-card">
+                    <img src="${offer.image || 'https://via.placeholder.com/300x150.png?text=No+Image'}" class="card-img-top" alt="${offer.name || 'Offer'}">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">${offer.name || 'Unnamed Offer'}</h5>
+                        <ul class="list-group list-group-flush details-list mb-auto">
+                            <li class="list-group-item"><i class="fa-solid fa-id-badge"></i><strong>Offer ID:</strong> ${offer.id || 'N/A'}</li>
+                            <li class="list-group-item"><i class="fa-solid fa-dollar-sign"></i><strong>Payout:</strong> ${payout.usd || 'N/A'} ${payout.currency || ''}</li>
+                            <li class="list-group-item"><i class="fa-solid fa-star"></i><strong>Featured:</strong> <span class="badge bg-${item.featured === 'yes' ? 'success' : 'secondary'}">${item.featured || 'N/A'}</span></li>
+                            <li class="list-group-item"><i class="fa-solid fa-mobile-alt"></i><strong>Devices:</strong> ${devices.join(', ') || 'N/A'}</li>
+                        </ul>
+                        ${description}
+                        ${eventsTable}
+                    </div>
+                    <div class="card-footer bg-light">
+                        <small class="text-muted">Requirements: ${offer.requirements || 'N/A'}</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    if (Array.isArray(data)) {
+        if (data.length === 0) return '<div class="alert alert-info">No results found.</div>';
+        return `<div class="row">${data.map((item, idx) => renderCard(item, idx)).join('')}</div>`;
+    } else if (typeof data === 'object' && data !== null) {
+        return `<div class="row">${renderCard(data, 0)}</div>`;
+    } else {
+        return `<div class="alert alert-secondary">${data}</div>`;
+    }
+}
+// Tab switching for admin API tester
+const adminPrettyTab = document.getElementById('admin-pretty-tab');
+const adminRawTab = document.getElementById('admin-raw-tab');
+const adminPrettyResult = document.getElementById('adminPrettyResult');
+const adminApiResult = document.getElementById('apiResponseOutput');
+adminPrettyTab.addEventListener('click', function() {
+    adminPrettyTab.classList.add('active');
+    adminRawTab.classList.remove('active');
+    adminPrettyResult.style.display = 'block';
+    adminApiResult.style.display = 'none';
+});
+adminRawTab.addEventListener('click', function() {
+    adminRawTab.classList.add('active');
+    adminPrettyTab.classList.remove('active');
+    adminPrettyResult.style.display = 'none';
+    adminApiResult.style.display = 'block';
+});
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.hljs) hljs.highlightAll();
+});
 document.getElementById('adminApiTestForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const method = document.getElementById('apiMethod').value;
     let url = document.getElementById('apiUrl').value.trim();
-    const outputElement = document.getElementById('apiResponseOutput');
+    adminPrettyResult.innerHTML = '<em>Loading...</em>';
+    adminApiResult.textContent = 'Loading...';
     // Collect query params
     const params = {};
     Array.from(document.querySelectorAll('.param-key')).forEach((el, i) => {
@@ -327,7 +464,6 @@ document.getElementById('adminApiTestForm').addEventListener('submit', function(
             }
         }
     }
-    outputElement.textContent = 'Fetching...';
     fetch('/admin/proxy-api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -349,11 +485,14 @@ document.getElementById('adminApiTestForm').addEventListener('submit', function(
         });
     })
     .then(result => {
-        outputElement.textContent = `Status: ${result.status} ${result.statusText}\n\n`;
-        outputElement.textContent += typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
+        adminPrettyResult.innerHTML = `<div class='mb-2'><strong>Status:</strong> ${result.status} ${result.statusText}</div>` + renderPretty(result.data);
+        if (window.hljs) hljs.highlightAll();
+        adminApiResult.textContent = `Status: ${result.status} ${result.statusText}\n\n`;
+        adminApiResult.textContent += typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
     })
     .catch(error => {
-        outputElement.textContent = `Error: ${error.message}\n\nPlease check the URL and ensure the API server is running.`;
+        adminPrettyResult.innerHTML = `<div class='alert alert-danger'>Error: ${error.message}</div>`;
+        adminApiResult.textContent = `Error: ${error.message}\n\nPlease check the URL and ensure the API server is running.`;
     });
 });
 </script>
