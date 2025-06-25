@@ -36,6 +36,8 @@ import secrets
 from flask_cors import CORS
 import threading
 from flask import abort
+from flask_mail import Mail, Message
+from apscheduler.schedulers.background import BackgroundScheduler
 
 
 # Decorator for admin access
@@ -71,6 +73,48 @@ app.config['RECAPTCHA_SECRET_KEY'] = os.getenv('RECAPTCHA_SECRET_KEY')
 app.config['RECAPTCHA_VERIFY_URL'] = 'https://www.google.com/recaptcha/api/siteverify'
 app.jinja_env.filters['fromjson'] = json.loads
 
+# Flask-Mail configuration
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'  # <-- Replace with your SMTP server
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = '01agarwal.jayant@gmail.com'       # <-- Replace with your email
+app.config['MAIL_PASSWORD'] = 'nxel jxen chvy bszz'         # <-- Replace with your password
+mail = Mail(app)
+
+# Daily report email task
+from flask import render_template
+
+def send_daily_form_reports():
+    with app.app_context():
+        users = User.query.all()
+        for user in users:
+            forms = Form.query.filter_by(user_id=user.id).all()
+            form_stats = []
+            for form in forms:
+                response_count = Response.query.filter_by(form_id=form.id).count()
+                form_stats.append({
+                    'title': form.title,
+                    'created_at': form.created_at,
+                    'response_count': response_count
+                })
+            if not forms:
+                continue  # Skip users with no forms
+            html = render_template('email/daily_report.html', user=user, form_stats=form_stats)
+            msg = Message(
+                subject="Your Daily Form Report",
+                recipients=[user.email],
+                html=html,
+                sender=app.config['MAIL_USERNAME']
+            )
+            try:
+                mail.send(msg)
+            except Exception as e:
+                print(f"Failed to send report to {user.email}: {e}")
+
+# Start the scheduler
+scheduler = BackgroundScheduler()
+scheduler.add_job(send_daily_form_reports, 'cron', hour=13, minute=50)
+scheduler.start()
 
 # Configure Google Generative AI with HTTP transport
 try:

@@ -16,4 +16,6 @@ flask-migrate
 flask_moment
 pymysql
 flask-cors
+APScheduler
+Flask-Mail
 
