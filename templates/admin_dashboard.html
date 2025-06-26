@@ -257,9 +257,13 @@
                       <li class="nav-item" role="presentation">
                         <button class="nav-link" id="admin-raw-tab" data-bs-toggle="tab" type="button" role="tab">Raw</button>
                       </li>
+                      <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="admin-table-tab" data-bs-toggle="tab" type="button" role="tab">Table View</button>
+                      </li>
                     </ul>
                     <div id="adminPrettyResult" style="display:block;"></div>
                     <pre id="apiResponseOutput" class="bg-dark text-white p-3 rounded" style="display:none;">API response will be shown here...</pre>
+                    <div id="adminTableResult" style="display:none;"></div>
                     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
                     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
                 </div>
@@ -346,6 +350,7 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
 function renderPretty(data) {
      // Deep search function to find all offer-related data
     function deepSearchOffers(obj, path = '', visited = new Set()) {
@@ -822,22 +827,559 @@ const headerHtml = `
 
 
 
+function renderTable(data) {
+    // Deep search function to find all offer-related data
+    function deepSearchOffers(obj, path = '', visited = new Set()) {
+        if (!obj || typeof obj !== 'object' || visited.has(obj)) {
+            return [];
+        }
+        visited.add(obj);
+        let offers = [];
+        // Check if current object has offer key
+        if (obj.hasOwnProperty('offer')) {
+            offers.push({
+                offerData: obj.offer,
+                completeData: obj, // The complete parent object
+                path: path
+            });
+        }
+        // Check for capitalized Offer
+        if (obj.hasOwnProperty('Offer')) {
+            offers.push({
+                offerData: obj.Offer,
+                completeData: obj,
+                path: path
+            });
+        }
+        // Recursively search all properties
+        if (Array.isArray(obj)) {
+            obj.forEach((item, index) => {
+                offers = offers.concat(deepSearchOffers(item, `${path}[${index}]`, visited));
+            });
+        } else {
+            Object.keys(obj).forEach(key => {
+                const newPath = path ? `${path}.${key}` : key;
+                offers = offers.concat(deepSearchOffers(obj[key], newPath, visited));
+            });
+        }
+        return offers;
+    }
+
+    // Enhanced deep search function for specific values
+    function deepSearchValue(obj, targetKeys, visited = new Set(), maxDepth = 10, currentDepth = 0) {
+        if (!obj || typeof obj !== 'object' || visited.has(obj) || currentDepth > maxDepth) {
+            return null;
+        }
+        visited.add(obj);
+        // First check direct properties
+        for (let key of targetKeys) {
+            if (obj.hasOwnProperty(key) && obj[key] !== null && obj[key] !== undefined && obj[key] !== '') {
+                let value = obj[key];
+                if (typeof value === 'string') {
+                    value = value.trim();
+                    if (value === '') continue;
+                }
+                return value;
+            }
+        }
+        // Then recursively search all nested objects
+        if (Array.isArray(obj)) {
+            for (let item of obj) {
+                const result = deepSearchValue(item, targetKeys, visited, maxDepth, currentDepth + 1);
+                if (result !== null) return result;
+            }
+        } else {
+            for (let key of Object.keys(obj)) {
+                const result = deepSearchValue(obj[key], targetKeys, visited, maxDepth, currentDepth + 1);
+                if (result !== null) return result;
+            }
+        }
+        return null;
+    }
+
+    // Enhanced function to search for nested values with dot notation and deep search
+    function deepSearchNestedValue(obj, paths, visited = new Set(), maxDepth = 10, currentDepth = 0) {
+        if (!obj || typeof obj !== 'object' || visited.has(obj) || currentDepth > maxDepth) {
+            return null;
+        }
+        visited.add(obj);
+        // First try dot notation paths
+        for (let path of paths) {
+            let current = obj;
+            let keys = path.split('.');
+            let success = true;
+            for (let key of keys) {
+                if (current && typeof current === 'object' && current.hasOwnProperty(key)) {
+                    current = current[key];
+                } else {
+                    success = false;
+                    break;
+                }
+            }
+            if (success && current !== null && current !== undefined && current !== '') {
+                if (Array.isArray(current)) {
+                    return current.length > 0 ? current : null;
+                }
+                return current;
+            }
+        }
+        // Then do deep search for the last part of each path
+        const simpleKeys = paths.map(path => path.split('.').pop()).filter(Boolean);
+        const deepResult = deepSearchValue(obj, simpleKeys, new Set(), maxDepth, currentDepth);
+        if (deepResult !== null) return deepResult;
+        // Finally, recursively search nested objects
+        if (Array.isArray(obj)) {
+            for (let item of obj) {
+                const result = deepSearchNestedValue(item, paths, visited, maxDepth, currentDepth + 1);
+                if (result !== null) return result;
+            }
+        } else {
+            for (let key of Object.keys(obj)) {
+                const result = deepSearchNestedValue(obj[key], paths, visited, maxDepth, currentDepth + 1);
+                if (result !== null) return result;
+            }
+        }
+        return null;
+    }
+
+    // Function to safely extract values with deep search capability
+    function extractValueDeep(obj, possibleKeys, fallback = 'N/A') {
+        if (!obj || typeof obj !== 'object') return fallback;
+        const result = deepSearchValue(obj, possibleKeys, new Set());
+        return result !== null ? result : fallback;
+    }
+
+    // Enhanced function to render any data type in a readable format
+    function renderDataStructure(data, depth = 0) {
+        const indent = '  '.repeat(depth);
+        const maxDepth = 10; // Prevent infinite recursion
+        if (depth > maxDepth) {
+            return '<span class="text-warning">[Max depth reached]</span>';
+        }
+        if (data === null) {
+            return '<span class="text-muted">null</span>';
+        }
+        if (data === undefined) {
+            return '<span class="text-muted">undefined</span>';
+        }
+        if (typeof data === 'string') {
+            // Handle URLs
+            if (data.startsWith('http://') || data.startsWith('https://')) {
+                return `<a href="${data}" target="_blank" class="text-primary text-decoration-none">${data}</a>`;
+            }
+            // Handle HTML content
+            if (data.includes('<') && data.includes('>')) {
+                const cleanText = data.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ').trim();
+                return `
+                    <div>
+                        <div class="text-muted small">Raw HTML:</div>
+                        <div class="bg-light p-2 rounded small" style="max-height: 100px; overflow-y: auto;">${data}</div>
+                        <div class="text-muted small mt-1">Clean text:</div>
+                        <div>${cleanText}</div>
+                    </div>
+                `;
+            }
+            return `<span class="text-success">"${data}"</span>`;
+        }
+        if (typeof data === 'number') {
+            return `<span class="text-info">${data}</span>`;
+        }
+        if (typeof data === 'boolean') {
+            return `<span class="text-${data ? 'success' : 'danger'}">${data}</span>`;
+        }
+        if (Array.isArray(data)) {
+            if (data.length === 0) {
+                return '<span class="text-muted">[]</span>';
+            }
+            let html = `<div class="border-start border-2 border-secondary ps-3 ms-2">`;
+            html += `<div class="text-muted small mb-2">Array (${data.length} items):</div>`;
+            data.forEach((item, index) => {
+                html += `
+                    <div class="mb-2">
+                        <span class="badge bg-secondary me-2">${index}</span>
+                        ${renderDataStructure(item, depth + 1)}
+                    </div>
+                `;
+            });
+            html += '</div>';
+            return html;
+        }
+        if (typeof data === 'object') {
+            const keys = Object.keys(data);
+            if (keys.length === 0) {
+                return '<span class="text-muted">{}</span>';
+            }
+            let html = `<div class="border-start border-2 border-primary ps-3 ms-2">`;
+            html += `<div class="text-muted small mb-2">Object (${keys.length} properties):</div>`;
+            keys.forEach(key => {
+                html += `
+                    <div class="mb-2">
+                        <div class="d-flex align-items-start">
+                            <strong class="text-primary me-2 flex-shrink-0">${key}:</strong>
+                            <div class="flex-grow-1">
+                                ${renderDataStructure(data[key], depth + 1)}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            return html;
+        }
+        return `<span class="text-muted">${String(data)}</span>`;
+    }
+
+    // Use a fast-loading SVG default image (very small, inline, no text)
+    const defaultImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCA0OCAzMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDgiIGhlaWdodD0iMzIiIGZpbGw9IiNlZWUiIHJ4PSI0Ii8+PGNpcmNsZSBjeD0iMTIiIGN5PSIxNiIgcj0iNSIgZmlsbD0iI2NjYyIvPjxjaXJjbGUgY3g9IjM2IiBjeT0iMTYiIHI9IjUiIGZpbGw9IiNjY2MiLz48L3N2Zz4=';
+
+    // Find all offers
+    const allOffers = deepSearchOffers(data);
+
+    if (allOffers.length === 0) {
+        return `
+            <div class="alert alert-warning border-0 shadow-sm" style="border-radius: 12px;">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="bg-warning rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                        <span class="text-white">⚠️</span>
+                    </div>
+                    <div>
+                        <h6 class="mb-0">No offers found in the data</h6>
+                        <small class="text-muted">Searched for "offer" or "Offer" keys at all nesting levels</small>
+                    </div>
+                </div>
+                <details class="mt-3">
+                    <summary class="btn btn-sm btn-outline-warning">🔍 View raw data structure</summary>
+                    <div class="mt-3 p-3 bg-light rounded" style="max-height: 400px; overflow-y: auto;">
+                        ${renderDataStructure(data)}
+                    </div>
+                </details>
+            </div>
+        `;
+    }
+
+    // Helper to extract and format countries/country codes
+    function getCountries(completeData) {
+        let countries = deepSearchNestedValue(completeData, [
+            'geo_targeting.allowed_countries', 'geo_targeting.countries', 'countries', 'allowed_countries',
+            'targeting.countries', 'targeting.geo', 'geo.countries', 'country', 'country_code',
+            'offer.countries', 'offer.geo_targeting.allowed_countries', 'offer.targeting.countries',
+            'location.countries', 'regions', 'territories', 'allowed_regions'
+        ]);
+        if (!countries) return [];
+        if (typeof countries === 'string') {
+            // Try to split by comma or semicolon or whitespace
+            if (countries.includes(',')) return countries.split(',').map(s => s.trim()).filter(Boolean);
+            if (countries.includes(';')) return countries.split(';').map(s => s.trim()).filter(Boolean);
+            if (countries.match(/^[A-Z]{2,3}$/i)) return [countries];
+            return [countries];
+        }
+        if (Array.isArray(countries)) {
+            return countries.filter(Boolean);
+        }
+        return [String(countries)];
+    }
+
+    // Helper to extract url/preview url
+    function getUrl(offerData, completeData) {
+        let url = extractValueDeep(offerData, ['url', 'preview_url', 'link', 'offer_url', 'tracking_url', 'landing_url', 'click_url', 'demo_url', 'website']);
+        if (!url || url === 'N/A') {
+            url = extractValueDeep(completeData, ['url', 'preview_url', 'link', 'offer_url', 'tracking_url', 'landing_url', 'click_url', 'demo_url', 'website']);
+        }
+        return url && url !== 'N/A' ? url : '';
+    }
+
+    // Helper to extract name
+    function getName(offerData, completeData) {
+        let name = extractValueDeep(offerData, ['name', 'title', 'offer_name', 'campaign_name', 'display_name', 'label']);
+        if (!name || name === 'N/A') {
+            name = extractValueDeep(completeData, ['name', 'title', 'offer_name', 'campaign_name', 'display_name', 'label']);
+        }
+        return name && name !== 'N/A' ? name : 'Unnamed Offer';
+    }
+
+    // Helper to extract id
+    function getId(offerData, completeData) {
+        let id = extractValueDeep(offerData, ['id', 'offer_id', 'campaign_id', 'affiliate_id', 'external_id', 'tracking_id']);
+        if (!id || id === 'N/A') {
+            id = extractValueDeep(completeData, ['id', 'offer_id', 'campaign_id', 'affiliate_id', 'external_id', 'tracking_id']);
+        }
+        return id && id !== 'N/A' ? id : 'N/A';
+    }
+
+    // Helper to extract image
+    function getImage(offerData, completeData) {
+        let image = extractValueDeep(offerData, ['image', 'image_url', 'thumbnail', 'icon', 'preview_url', 'logo', 'banner', 'creative_url']);
+        if (!image || image === 'N/A') {
+            image = extractValueDeep(completeData, ['image', 'image_url', 'thumbnail', 'icon', 'preview_url', 'logo', 'banner', 'creative_url']);
+        }
+        return image && image !== 'N/A' ? image : defaultImage;
+    }
+
+    // Helper to extract description
+    function getDescription(offerData, completeData) {
+        let description = extractValueDeep(offerData, ['description', 'desc', 'summary', 'details', 'short_description', 'long_description', 'content', 'text']);
+        if (!description || description === 'N/A') {
+            description = extractValueDeep(completeData, ['description', 'desc', 'summary', 'details', 'short_description', 'long_description', 'content', 'text']);
+        }
+        return description && description !== 'N/A' ? description : '';
+    }
+
+    // Helper to extract payout
+    function getPayout(completeData) {
+        let payout = deepSearchNestedValue(completeData, [
+            'payout.usd', 'payout.amount', 'payout.value', 'payout.price', 'payout', 
+            'default_payout', 'commission', 'reward', 'price', 'cost', 'revenue',
+            'offer.payout', 'offer.payout.usd', 'offer.payout.amount',
+            'payment.amount', 'payment.value', 'earnings', 'cpa', 'cpc', 'cpm'
+        ]);
+        return payout ? payout : 'N/A';
+    }
+
+    // Pagination state
+    let currentPage = 1;
+    const pageSize = 10;
+    const totalPages = Math.ceil(allOffers.length / pageSize);
+
+    // Helper to render the table rows for the current page
+    function renderTableRows(page) {
+        const start = (page - 1) * pageSize;
+        const end = Math.min(start + pageSize, allOffers.length);
+        return allOffers.slice(start, end).map((offer, index) => {
+            const globalIndex = start + index;
+            const { offerData, completeData } = offer;
+            const id = getId(offerData, completeData);
+            const name = getName(offerData, completeData);
+            const image = getImage(offerData, completeData);
+            const countries = getCountries(completeData);
+            const url = getUrl(offerData, completeData);
+            // Countries as badges, handle empty
+            let countriesHtml = '';
+            if (countries.length) {
+                countriesHtml = countries.map(c => `<span class="badge bg-info text-dark me-1 mb-1">${c}</span>`).join('');
+            } else {
+                countriesHtml = `<span class="text-muted">N/A</span>`;
+            }
+            // URL as link or muted, only show the url string
+            let urlHtml = '';
+            if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                urlHtml = `<a href="${url}" target="_blank" class="text-primary text-decoration-none text-truncate" style="max-width:120px;display:inline-block;">${url}</a>`;
+            } else if (url) {
+                urlHtml = `<span class="text-success text-truncate" style="max-width:120px;display:inline-block;">${url}</span>`;
+            } else {
+                urlHtml = `<span class="text-muted">N/A</span>`;
+            }
+            // Image as small thumbnail
+            let imgHtml = `<img src="${image}" alt="${name}" style="width:48px;height:32px;object-fit:cover;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.07);" onerror="this.src='${defaultImage}'">`;
+            // "View Details" button
+            let viewDetailsBtn = `<button class="btn btn-sm btn-outline-primary view-details-btn" data-offer-index="${globalIndex}">View Details</button>`;
+            return `
+                <tr>
+                    <td><span class="fw-bold">${id}</span></td>
+                    <td><span class="text-primary">${name}</span></td>
+                    <td>${imgHtml}</td>
+                    <td style="max-width:160px;">${countriesHtml}</td>
+                    <td style="max-width:180px;">
+                        ${urlHtml}
+                        <div class="mt-2">${viewDetailsBtn}</div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Create header
+    const headerHtml = `
+        <div class="mb-4 p-4 rounded-3 shadow-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h3 class="mb-2">🎯 Offers Found</h3>
+                    <p class="mb-0 opacity-75">Discovered ${allOffers.length} offer${allOffers.length !== 1 ? 's' : ''} with enhanced deep search.</p>
+                </div>
+                <div class="col-md-4 text-md-end">
+                    <div class="bg-white text-dark rounded-pill px-3 py-2 d-inline-block shadow-sm">
+                        <strong class="fs-4">${allOffers.length}</strong>
+                        <small class="ms-1">offers</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Table header
+    const tableHeader = `
+        <div class="table-responsive">
+        <table class="table table-hover align-middle shadow-sm" style="border-radius: 12px; overflow: hidden;">
+            <thead class="table-primary">
+                <tr>
+                    <th style="min-width:60px;">ID</th>
+                    <th style="min-width:120px;">Name</th>
+                    <th style="min-width:60px;">Image</th>
+                    <th style="min-width:100px;">Countries</th>
+                    <th style="min-width:120px;">URL / Details</th>
+                </tr>
+            </thead>
+            <tbody id="offers-table-body">
+            </tbody>
+        </table>
+        </div>
+    `;
+
+    // Modal for viewing offer details (single modal reused)
+    const modalHtml = `
+        <div class="modal fade" id="offerDetailsModal" tabindex="-1" aria-labelledby="offerDetailsModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="offerDetailsModalLabel">Offer Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body" id="offerDetailsModalBody">
+                <!-- Offer details will be injected here -->
+              </div>
+            </div>
+          </div>
+        </div>
+    `;
+
+    // Pagination controls
+    function renderPaginationControls(page, totalPages) {
+        return `
+            <div class="d-flex justify-content-between align-items-center my-3">
+                <button class="btn btn-outline-secondary btn-sm" id="offers-prev-btn" ${page === 1 ? 'disabled' : ''}>Previous</button>
+                <span>Page <strong id="offers-page-num">${page}</strong> of <strong id="offers-total-pages">${totalPages}</strong></span>
+                <button class="btn btn-outline-secondary btn-sm" id="offers-next-btn" ${page === totalPages ? 'disabled' : ''}>Next</button>
+            </div>
+        `;
+    }
+
+    // Compose the HTML (include modal)
+    let html = modalHtml + headerHtml + tableHeader + renderPaginationControls(currentPage, totalPages);
+
+    // After rendering, we need to fill the table body and set up pagination and view details
+    setTimeout(function() {
+        // Initial render
+        const tbody = document.getElementById('offers-table-body');
+        if (tbody) tbody.innerHTML = renderTableRows(currentPage);
+
+        // Pagination controls
+        const prevBtn = document.getElementById('offers-prev-btn');
+        const nextBtn = document.getElementById('offers-next-btn');
+        const pageNum = document.getElementById('offers-page-num');
+        const totalPagesSpan = document.getElementById('offers-total-pages');
+
+        function updateTable(page) {
+            if (tbody) tbody.innerHTML = renderTableRows(page);
+            if (pageNum) pageNum.textContent = page;
+            if (prevBtn) prevBtn.disabled = page === 1;
+            if (nextBtn) nextBtn.disabled = page === totalPages;
+            setupViewDetailsHandlers(); // re-setup handlers after table rerender
+        }
+
+        if (prevBtn) {
+            prevBtn.onclick = function() {
+                if (currentPage > 1) {
+                    currentPage--;
+                    updateTable(currentPage);
+                }
+            };
+        }
+        if (nextBtn) {
+            nextBtn.onclick = function() {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    updateTable(currentPage);
+                }
+            };
+        }
+
+        // Setup view details button handlers
+        function setupViewDetailsHandlers() {
+            const buttons = document.querySelectorAll('.view-details-btn');
+            buttons.forEach(btn => {
+                btn.onclick = function() {
+                    const offerIndex = parseInt(btn.getAttribute('data-offer-index'));
+                    const offer = allOffers[offerIndex];
+                    if (!offer) return;
+                    // Render the complete offer data
+                    const modalBody = document.getElementById('offerDetailsModalBody');
+                    if (modalBody) {
+                        modalBody.innerHTML = `
+                            <div class="mb-3">
+                                <div class="text-muted small">Path: <code>${offer.path}</code></div>
+                            </div>
+                            <div>${renderDataStructure(offer.completeData)}</div>
+                        `;
+                    }
+                    // Show the modal (Bootstrap 5)
+                    let modalEl = document.getElementById('offerDetailsModal');
+                    if (window.bootstrap && modalEl) {
+                        let modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                        modal.show();
+                    } else if (modalEl) {
+                        // fallback: show as block if Bootstrap not loaded
+                        modalEl.style.display = 'block';
+                        modalEl.classList.add('show');
+                        modalEl.setAttribute('aria-modal', 'true');
+                        modalEl.removeAttribute('aria-hidden');
+                        // Add close on click for btn-close
+                        const closeBtn = modalEl.querySelector('.btn-close');
+                        if (closeBtn) {
+                            closeBtn.onclick = function() {
+                                modalEl.style.display = 'none';
+                                modalEl.classList.remove('show');
+                                modalEl.setAttribute('aria-hidden', 'true');
+                                modalEl.removeAttribute('aria-modal');
+                            };
+                        }
+                    }
+                };
+            });
+        }
+        setupViewDetailsHandlers();
+    }, 0);
+
+    return html;
+}
+
+
+
+
+
 // Tab switching for admin API tester
 const adminPrettyTab = document.getElementById('admin-pretty-tab');
 const adminRawTab = document.getElementById('admin-raw-tab');
+const adminTableTab = document.getElementById('admin-table-tab');
 const adminPrettyResult = document.getElementById('adminPrettyResult');
 const adminApiResult = document.getElementById('apiResponseOutput');
+const adminTableResult = document.getElementById('adminTableResult');
+
 adminPrettyTab.addEventListener('click', function() {
     adminPrettyTab.classList.add('active');
     adminRawTab.classList.remove('active');
+    adminTableTab.classList.remove('active');
     adminPrettyResult.style.display = 'block';
     adminApiResult.style.display = 'none';
+    adminTableResult.style.display = 'none';
 });
 adminRawTab.addEventListener('click', function() {
     adminRawTab.classList.add('active');
     adminPrettyTab.classList.remove('active');
+    adminTableTab.classList.remove('active');
     adminPrettyResult.style.display = 'none';
     adminApiResult.style.display = 'block';
+    adminTableResult.style.display = 'none';
+});
+adminTableTab.addEventListener('click', function() {
+    adminTableTab.classList.add('active');
+    adminPrettyTab.classList.remove('active');
+    adminRawTab.classList.remove('active');
+    adminPrettyResult.style.display = 'none';
+    adminApiResult.style.display = 'none';
+    adminTableResult.style.display = 'block';
+    // Render table only now
+    if (window.latestApiData) {
+        adminTableResult.innerHTML = renderTable(window.latestApiData);
+    }
 });
 document.addEventListener('DOMContentLoaded', function() {
     if (window.hljs) hljs.highlightAll();
@@ -848,6 +1390,7 @@ document.getElementById('adminApiTestForm').addEventListener('submit', function(
     let url = document.getElementById('apiUrl').value.trim();
     adminPrettyResult.innerHTML = '<em>Loading...</em>';
     adminApiResult.textContent = 'Loading...';
+    adminTableResult.innerHTML = '<em>Loading...</em>';
     // Collect query params
     const params = {};
     Array.from(document.querySelectorAll('.param-key')).forEach((el, i) => {
@@ -896,16 +1439,21 @@ document.getElementById('adminApiTestForm').addEventListener('submit', function(
         });
     })
     .then(result => {
+        window.latestApiData = result.data;
         adminPrettyResult.innerHTML = `<div class='mb-2'><strong>Status:</strong> ${result.status} ${result.statusText}</div>` + renderPretty(result.data);
         if (window.hljs) hljs.highlightAll();
         adminApiResult.textContent = `Status: ${result.status} ${result.statusText}\n\n`;
         adminApiResult.textContent += typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
+        adminTableResult.innerHTML = renderTable(result.data);
     })
     .catch(error => {
         adminPrettyResult.innerHTML = `<div class='alert alert-danger'>Error: ${error.message}</div>`;
         adminApiResult.textContent = `Error: ${error.message}\n\nPlease check the URL and ensure the API server is running.`;
+        adminTableResult.innerHTML = `<div class='alert alert-danger'>Error: ${error.message}</div>`;
     });
 });
+
+window.latestApiData = null;
 </script>
 {% endblock %} 
 
