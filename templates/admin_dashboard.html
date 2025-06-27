@@ -585,6 +585,30 @@ function renderPretty(data) {
         return `<span class="text-muted">${String(data)}</span>`;
     }
     
+    // Helper function to extract country codes from name
+    function extractCountriesFromName(name) {
+        if (!name || typeof name !== 'string') return [];
+        
+        // Look for patterns like _NL_CH_SE_DK_NO_FI_DE_AT or similar
+        // This regex looks for 2-3 letter country codes after underscores
+        const countryCodePattern = /_([A-Z]{2,3})(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*/g;
+        
+        const matches = [];
+        let match;
+        
+        while ((match = countryCodePattern.exec(name)) !== null) {
+            // Extract all captured groups (country codes)
+            for (let i = 1; i < match.length; i++) {
+                if (match[i] && match[i].length >= 2) {
+                    matches.push(match[i]);
+                }
+            }
+        }
+        
+        // Remove duplicates and return
+        return [...new Set(matches)];
+    }
+    
     // Function to create offer card
     function createOfferCard(offerInfo, index) {
         const { offerData, completeData, path } = offerInfo;
@@ -616,26 +640,24 @@ function renderPretty(data) {
         ]) || 'N/A';
         
         // Enhanced countries search with deep search
-        const countries = deepSearchNestedValue(completeData, [
+        let countries = deepSearchNestedValue(completeData, [
             'geo_targeting.allowed_countries', 'geo_targeting.countries', 'countries', 'allowed_countries',
             'targeting.countries', 'targeting.geo', 'geo.countries', 'country', 'country_code',
             'offer.countries', 'offer.geo_targeting.allowed_countries', 'offer.targeting.countries',
             'location.countries', 'regions', 'territories', 'allowed_regions'
         ]) || 'N/A';
         
+        // If no countries found in data, try to extract from name
+        if (countries === 'N/A' || !countries || countries === '') {
+            const extractedCountries = extractCountriesFromName(name);
+            if (extractedCountries.length > 0) {
+                countries = extractedCountries.join(', ');
+            }
+        }
+        
         // Default image with "No Image Available" text
-      const defaultImage = 'data:image/svg+xml;base64,' + btoa(`
-<svg width="300" height="180" viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg">
-  <rect width="300" height="180" fill="#f8f9fa" rx="12" stroke="#dee2e6" stroke-width="2"/>
-  <g fill="none" stroke="#ced4da" stroke-width="2">
-    <path d="M60 120 L100 80 L140 120 L180 90 L240 130"/>
-    <circle cx="80" cy="80" r="12" fill="#adb5bd"/>
-  </g>
-  <text x="150" y="160" font-family="Segoe UI, sans-serif" font-size="16" text-anchor="middle" fill="#6c757d">
-    No Image Available
-  </text>
-</svg>
-`);
+      const defaultImage = 'https://offery.io/files/offers/offer-9mzcxpqvm.png';
+
 
         const finalImage = image || defaultImage;
         
@@ -824,9 +846,6 @@ const headerHtml = `
     return headerHtml + `<div class="row">${cardsHtml}</div>`;
 }
 
-
-
-
 function renderTable(data) {
     // Deep search function to find all offer-related data
     function deepSearchOffers(obj, path = '', visited = new Set()) {
@@ -851,6 +870,7 @@ function renderTable(data) {
                 path: path
             });
         }
+        
         // Recursively search all properties
         if (Array.isArray(obj)) {
             obj.forEach((item, index) => {
@@ -1030,7 +1050,7 @@ function renderTable(data) {
     }
 
     // Use a fast-loading SVG default image (very small, inline, no text)
-    const defaultImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCA0OCAzMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDgiIGhlaWdodD0iMzIiIGZpbGw9IiNlZWUiIHJ4PSI0Ii8+PGNpcmNsZSBjeD0iMTIiIGN5PSIxNiIgcj0iNSIgZmlsbD0iI2NjYyIvPjxjaXJjbGUgY3g9IjM2IiBjeT0iMTYiIHI9IjUiIGZpbGw9IiNjY2MiLz48L3N2Zz4=';
+    const defaultImage = 'https://offery.io/files/offers/offer-9mzcxpqvm.png';
 
     // Find all offers
     const allOffers = deepSearchOffers(data);
@@ -1065,18 +1085,67 @@ function renderTable(data) {
             'offer.countries', 'offer.geo_targeting.allowed_countries', 'offer.targeting.countries',
             'location.countries', 'regions', 'territories', 'allowed_regions'
         ]);
-        if (!countries) return [];
+        
+        if (!countries) countries = [];
         if (typeof countries === 'string') {
             // Try to split by comma or semicolon or whitespace
-            if (countries.includes(',')) return countries.split(',').map(s => s.trim()).filter(Boolean);
-            if (countries.includes(';')) return countries.split(';').map(s => s.trim()).filter(Boolean);
-            if (countries.match(/^[A-Z]{2,3}$/i)) return [countries];
-            return [countries];
+            if (countries.includes(',')) countries = countries.split(',').map(s => s.trim()).filter(Boolean);
+            else if (countries.includes(';')) countries = countries.split(';').map(s => s.trim()).filter(Boolean);
+            else if (countries.match(/^[A-Z]{2,3}$/i)) countries = [countries];
+            else countries = [countries];
         }
         if (Array.isArray(countries)) {
-            return countries.filter(Boolean);
+            countries = countries.filter(Boolean);
+        } else {
+            countries = [String(countries)];
         }
-        return [String(countries)];
+        
+        // If no countries found in data, try to extract from name
+        if (countries.length === 0 || (countries.length === 1 && countries[0] === 'N/A')) {
+            const name = getName(completeData.offer || {}, completeData);
+            const extractedCountries = extractCountriesFromName(name);
+            if (extractedCountries.length > 0) {
+                countries = extractedCountries;
+            }
+        }
+        
+        return countries;
+    }
+
+    // Helper function to extract country codes from name
+    function extractCountriesFromName(name) {
+        if (!name || typeof name !== 'string') return [];
+        
+        // Look for patterns like _CPA_NL_CH_SE_DK_NO_FI_DE_AT
+        // First find the CPA pattern
+        const cpaIndex = name.indexOf('_CPA');
+        if (cpaIndex !== -1) {
+            const afterCpa = name.substring(cpaIndex + 4); // +4 to skip '_CPA'
+            
+            // Extract 2-letter country codes after CPA
+            const countryMatches = afterCpa.match(/_[A-Z]{2}/g);
+            if (countryMatches) {
+                return countryMatches.map(match => match.substring(1)); // Remove the underscore
+            }
+        }
+        
+        // Fallback: look for any 2-letter country codes after underscores
+        const countryCodePattern = /_([A-Z]{2})(?:_([A-Z]{2}))*(?:_([A-Z]{2}))*(?:_([A-Z]{2}))*(?:_([A-Z]{2}))*(?:_([A-Z]{2}))*(?:_([A-Z]{2}))*/g;
+        
+        const matches = [];
+        let match;
+        
+        while ((match = countryCodePattern.exec(name)) !== null) {
+            // Extract all captured groups (country codes)
+            for (let i = 1; i < match.length; i++) {
+                if (match[i] && match[i].length === 2) {
+                    matches.push(match[i]);
+                }
+            }
+        }
+        
+        // Remove duplicates and return
+        return [...new Set(matches)];
     }
 
     // Helper to extract url/preview url
@@ -1135,16 +1204,62 @@ function renderTable(data) {
         return payout ? payout : 'N/A';
     }
 
+    // Filter function
+    function filterOffers(offers, filters) {
+        return offers.filter(offer => {
+            const { offerData, completeData } = offer;
+            
+            // Name filter
+            if (filters.name) {
+                const name = getName(offerData, completeData).toLowerCase();
+                if (!name.includes(filters.name.toLowerCase())) {
+                    return false;
+                }
+            }
+            
+            // ID filter
+            if (filters.id) {
+                const id = getId(offerData, completeData).toLowerCase();
+                if (!id.includes(filters.id.toLowerCase())) {
+                    return false;
+                }
+            }
+            
+            // Countries filter
+            if (filters.countries) {
+                const countries = getCountries(completeData);
+                const hasMatchingCountry = countries.some(country => 
+                    country.toLowerCase().includes(filters.countries.toLowerCase())
+                );
+                if (!hasMatchingCountry) {
+                    return false;
+                }
+            }
+            
+            // Payout filter
+            if (filters.payout) {
+                const payout = getPayout(completeData);
+                const payoutNum = parseFloat(payout.toString().replace(/[^0-9.-]/g, ''));
+                if (isNaN(payoutNum) || payoutNum < parseFloat(filters.payout)) {
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+    }
+
     // Pagination state
     let currentPage = 1;
     const pageSize = 10;
-    const totalPages = Math.ceil(allOffers.length / pageSize);
+    let filteredOffers = allOffers;
+    let totalPages = Math.ceil(filteredOffers.length / pageSize);
 
     // Helper to render the table rows for the current page
     function renderTableRows(page) {
         const start = (page - 1) * pageSize;
-        const end = Math.min(start + pageSize, allOffers.length);
-        return allOffers.slice(start, end).map((offer, index) => {
+        const end = Math.min(start + pageSize, filteredOffers.length);
+        return filteredOffers.slice(start, end).map((offer, index) => {
             const globalIndex = start + index;
             const { offerData, completeData } = offer;
             const id = getId(offerData, completeData);
@@ -1152,6 +1267,8 @@ function renderTable(data) {
             const image = getImage(offerData, completeData);
             const countries = getCountries(completeData);
             const url = getUrl(offerData, completeData);
+            const payout = getPayout(completeData);
+            
             // Countries as badges, handle empty
             let countriesHtml = '';
             if (countries.length) {
@@ -1159,6 +1276,7 @@ function renderTable(data) {
             } else {
                 countriesHtml = `<span class="text-muted">N/A</span>`;
             }
+            
             // URL as link or muted, only show the url string
             let urlHtml = '';
             if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
@@ -1168,16 +1286,24 @@ function renderTable(data) {
             } else {
                 urlHtml = `<span class="text-muted">N/A</span>`;
             }
+            
             // Image as small thumbnail
             let imgHtml = `<img src="${image}" alt="${name}" style="width:48px;height:32px;object-fit:cover;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.07);" onerror="this.src='${defaultImage}'">`;
+            
             // "View Details" button
             let viewDetailsBtn = `<button class="btn btn-sm btn-outline-primary view-details-btn" data-offer-index="${globalIndex}">View Details</button>`;
+            
+            // Add checkbox for selection
+            let checkbox = `<input type="checkbox" class="offer-row-checkbox" data-offer-index="${globalIndex}">`;
+            
             return `
                 <tr>
+                    <td>${checkbox}</td>
                     <td><span class="fw-bold">${id}</span></td>
                     <td><span class="text-primary">${name}</span></td>
                     <td>${imgHtml}</td>
                     <td style="max-width:160px;">${countriesHtml}</td>
+                    <td><span class="text-success fw-bold">${payout}</span></td>
                     <td style="max-width:180px;">
                         ${urlHtml}
                         <div class="mt-2">${viewDetailsBtn}</div>
@@ -1197,8 +1323,50 @@ function renderTable(data) {
                 </div>
                 <div class="col-md-4 text-md-end">
                     <div class="bg-white text-dark rounded-pill px-3 py-2 d-inline-block shadow-sm">
-                        <strong class="fs-4">${allOffers.length}</strong>
+                        <strong class="fs-4" id="filtered-count">${allOffers.length}</strong>
                         <small class="ms-1">offers</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Filter controls
+    const filterControlsHtml = `
+        <div class="card mb-4 shadow-sm" style="border-radius: 12px;">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">🔍 Filter Options</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="filter-name" class="form-label small">Name</label>
+                        <input type="text" class="form-control form-control-sm" id="filter-name" placeholder="Search by name...">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="filter-id" class="form-label small">ID</label>
+                        <input type="text" class="form-control form-control-sm" id="filter-id" placeholder="Search by ID...">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="filter-countries" class="form-label small">Countries</label>
+                        <input type="text" class="form-control form-control-sm" id="filter-countries" placeholder="Search by country...">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="filter-payout" class="form-label small">Min Payout</label>
+                        <input type="number" class="form-control form-control-sm" id="filter-payout" placeholder="Min payout value..." step="0.01">
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button type="button" class="btn btn-primary btn-sm me-2" id="apply-filters">
+                            <i class="fas fa-filter me-1"></i>Apply Filters
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="clear-filters">
+                            <i class="fas fa-times me-1"></i>Clear Filters
+                        </button>
+                        <span class="ms-3 text-muted small">
+                            Showing <span id="showing-count">${allOffers.length}</span> of <span id="total-count">${allOffers.length}</span> offers
+                        </span>
                     </div>
                 </div>
             </div>
@@ -1207,14 +1375,24 @@ function renderTable(data) {
 
     // Table header
     const tableHeader = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <button type="button" class="btn btn-success btn-sm" id="check-url-btn">
+                    <i class="fas fa-link me-1"></i>Check URL
+                </button>
+                <span class="ms-2 text-muted small">(Select rows to check their URLs)</span>
+            </div>
+        </div>
         <div class="table-responsive">
         <table class="table table-hover align-middle shadow-sm" style="border-radius: 12px; overflow: hidden;">
             <thead class="table-primary">
                 <tr>
+                    <th style="min-width:30px;"><input type="checkbox" id="select-all-offers"></th>
                     <th style="min-width:60px;">ID</th>
                     <th style="min-width:120px;">Name</th>
                     <th style="min-width:60px;">Image</th>
                     <th style="min-width:100px;">Countries</th>
+                    <th style="min-width:80px;">Payout</th>
                     <th style="min-width:120px;">URL / Details</th>
                 </tr>
             </thead>
@@ -1253,13 +1431,54 @@ function renderTable(data) {
     }
 
     // Compose the HTML (include modal)
-    let html = modalHtml + headerHtml + tableHeader + renderPaginationControls(currentPage, totalPages);
+    let html = modalHtml + headerHtml + filterControlsHtml + tableHeader + renderPaginationControls(currentPage, totalPages);
 
     // After rendering, we need to fill the table body and set up pagination and view details
     setTimeout(function() {
         // Initial render
         const tbody = document.getElementById('offers-table-body');
         if (tbody) tbody.innerHTML = renderTableRows(currentPage);
+
+        // Filter functionality
+        function applyFilters() {
+            const filters = {
+                name: document.getElementById('filter-name').value,
+                id: document.getElementById('filter-id').value,
+                countries: document.getElementById('filter-countries').value,
+                payout: document.getElementById('filter-payout').value
+            };
+            
+            filteredOffers = filterOffers(allOffers, filters);
+            currentPage = 1; // Reset to first page
+            totalPages = Math.ceil(filteredOffers.length / pageSize);
+            
+            // Update counts
+            document.getElementById('filtered-count').textContent = filteredOffers.length;
+            document.getElementById('showing-count').textContent = filteredOffers.length;
+            document.getElementById('total-count').textContent = allOffers.length;
+            
+            // Re-render table and pagination
+            updateTable(currentPage);
+        }
+
+        function clearFilters() {
+            document.getElementById('filter-name').value = '';
+            document.getElementById('filter-id').value = '';
+            document.getElementById('filter-countries').value = '';
+            document.getElementById('filter-payout').value = '';
+            
+            filteredOffers = allOffers;
+            currentPage = 1;
+            totalPages = Math.ceil(filteredOffers.length / pageSize);
+            
+            // Update counts
+            document.getElementById('filtered-count').textContent = allOffers.length;
+            document.getElementById('showing-count').textContent = allOffers.length;
+            document.getElementById('total-count').textContent = allOffers.length;
+            
+            // Re-render table and pagination
+            updateTable(currentPage);
+        }
 
         // Pagination controls
         const prevBtn = document.getElementById('offers-prev-btn');
@@ -1270,6 +1489,7 @@ function renderTable(data) {
         function updateTable(page) {
             if (tbody) tbody.innerHTML = renderTableRows(page);
             if (pageNum) pageNum.textContent = page;
+            if (totalPagesSpan) totalPagesSpan.textContent = totalPages;
             if (prevBtn) prevBtn.disabled = page === 1;
             if (nextBtn) nextBtn.disabled = page === totalPages;
             setupViewDetailsHandlers(); // re-setup handlers after table rerender
@@ -1292,13 +1512,25 @@ function renderTable(data) {
             };
         }
 
+        // Filter event listeners
+        const applyFiltersBtn = document.getElementById('apply-filters');
+        const clearFiltersBtn = document.getElementById('clear-filters');
+        
+        if (applyFiltersBtn) {
+            applyFiltersBtn.onclick = applyFilters;
+        }
+        
+        if (clearFiltersBtn) {
+            clearFiltersBtn.onclick = clearFilters;
+        }
+
         // Setup view details button handlers
         function setupViewDetailsHandlers() {
             const buttons = document.querySelectorAll('.view-details-btn');
             buttons.forEach(btn => {
                 btn.onclick = function() {
                     const offerIndex = parseInt(btn.getAttribute('data-offer-index'));
-                    const offer = allOffers[offerIndex];
+                    const offer = filteredOffers[offerIndex];
                     if (!offer) return;
                     // Render the complete offer data
                     const modalBody = document.getElementById('offerDetailsModalBody');
@@ -1336,14 +1568,110 @@ function renderTable(data) {
             });
         }
         setupViewDetailsHandlers();
+
+        // Add select all functionality
+        const selectAll = document.getElementById('select-all-offers');
+        if (selectAll) {
+            selectAll.onclick = function() {
+                const checkboxes = document.querySelectorAll('.offer-row-checkbox');
+                checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+            };
+        }
+        // Check URL button logic
+        const checkUrlBtn = document.getElementById('check-url-btn');
+        if (checkUrlBtn) {
+            checkUrlBtn.onclick = function() {
+                const checkboxes = document.querySelectorAll('.offer-row-checkbox:checked');
+                const url_country_pairs = [];
+                
+                checkboxes.forEach(cb => {
+                    const idx = parseInt(cb.getAttribute('data-offer-index'));
+                    const offer = filteredOffers[idx];
+                    if (!offer) return;
+                    
+                    const url = getUrl(offer.offerData, offer.completeData);
+                    const countries = getCountries(offer.completeData);
+                    
+                    if (url && countries && countries.length > 0) {
+                        // Include offer details in the request
+                        url_country_pairs.push({
+                            url: url,
+                            countries: countries,
+                            offer_data: {
+                                id: getId(offer.offerData, offer.completeData),
+                                name: getName(offer.offerData, offer.completeData),
+                                image: getImage(offer.offerData, offer.completeData),
+                                countries: countries,
+                                payout: getPayout(offer.completeData)
+                            }
+                        });
+                    }
+                });
+                
+                if (url_country_pairs.length === 0) {
+                    alert('Please select at least one row with valid URL and countries.');
+                    return;
+                }
+                
+                // Show loading indicator
+                adminTableResult.innerHTML = `
+                    <div class="d-flex justify-content-center align-items-center" style="min-height: 300px;">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <h5 class="text-muted">Testing URLs with Proxies...</h5>
+                            <p class="text-muted small">This may take a few moments depending on the number of URLs and countries.</p>
+                            <div class="progress mt-3" style="width: 300px; margin: 0 auto;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                fetch('/api_tester_selectred-row', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url_country_pairs })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    // Show results in the main table area
+                    adminTableResult.innerHTML = renderProxyTestResultsTable(data.results);
+                    // Add back button handler
+                    const backBtn = document.getElementById('back-to-offers-table');
+                    if (backBtn) {
+                        backBtn.onclick = function() {
+                            adminTableResult.innerHTML = renderTable(window.latestApiData);
+                        };
+                    }
+                })
+                .catch(err => {
+                    // Show error message if request fails
+                    adminTableResult.innerHTML = `
+                        <div class="alert alert-danger border-0 shadow-sm" style="border-radius: 12px;">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="bg-danger rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                    <span class="text-white">❌</span>
+                                </div>
+                                <div>
+                                    <h6 class="mb-0">Error Testing URLs</h6>
+                                    <small class="text-muted">Failed to test the selected URLs with proxies</small>
+                                </div>
+                            </div>
+                            <p class="mb-3">Error: ${err.message}</p>
+                            <button class="btn btn-outline-primary btn-sm" onclick="adminTableResult.innerHTML = renderTable(window.latestApiData)">
+                                Back to Offers Table
+                            </button>
+                        </div>
+                    `;
+                });
+            };
+        }
     }, 0);
 
     return html;
 }
-
-
-
-
 
 // Tab switching for admin API tester
 const adminPrettyTab = document.getElementById('admin-pretty-tab');
@@ -1454,18 +1782,105 @@ document.getElementById('adminApiTestForm').addEventListener('submit', function(
 });
 
 window.latestApiData = null;
+
+function renderProxyTestResultsTable(results) {
+    // Use a fast-loading SVG default image (very small, inline, no text)
+    const defaultImage = 'https://offery.io/files/offers/offer-9mzcxpqvm.png';
+    
+    let html = `
+        <div class="mb-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Proxy Test Results</h5>
+            <button class="btn btn-outline-primary btn-sm" id="back-to-offers-table">Back to Offers Table</button>
+        </div>
+        <div class="table-responsive">
+        <table class="table table-hover align-middle shadow-sm" style="border-radius: 12px; overflow: hidden;">
+            <thead class="table-primary">
+                <tr>
+                    <th style="min-width:30px;">#</th>
+                    <th style="min-width:60px;">ID</th>
+                    <th style="min-width:120px;">Name</th>
+                    <th style="min-width:60px;">Image</th>
+                    <th style="min-width:100px;">Countries</th>
+                    <th style="min-width:80px;">Payout</th>
+                    <th style="min-width:120px;">URL / Details</th>
+                    <th style="min-width:100px;">Status</th>
+                    <th style="min-width:100px;">IP Country</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${results.map((r, index) => {
+                    // Get offer details if available, otherwise use defaults
+                    const id = r.id || 'N/A';
+                    const name = r.name || 'N/A';
+                    const image = r.image || defaultImage;
+                    const countries = r.countries || [];
+                    const payout = r.payout || 'N/A';
+                    const url = r.url || '';
+                    const status = r.status || 'N/A';
+                    const ip_country = r.ip_country || 'N/A';
+                    
+                    // Countries as badges, handle empty
+                    let countriesHtml = '';
+                    if (countries.length) {
+                        countriesHtml = countries.map(c => `<span class="badge bg-info text-dark me-1 mb-1">${c}</span>`).join('');
+                    } else {
+                        countriesHtml = `<span class="text-muted">N/A</span>`;
+                    }
+                    
+                    // URL as link or muted, only show the url string
+                    let urlHtml = '';
+                    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                        urlHtml = `<a href="${url}" target="_blank" class="text-primary text-decoration-none text-truncate" style="max-width:120px;display:inline-block;">${url}</a>`;
+                    } else if (url) {
+                        urlHtml = `<span class="text-success text-truncate" style="max-width:120px;display:inline-block;">${url}</span>`;
+                    } else {
+                        urlHtml = `<span class="text-muted">N/A</span>`;
+                    }
+                    
+                    // Image as small thumbnail
+                    let imgHtml = `<img src="${image}" alt="${name}" style="width:48px;height:32px;object-fit:cover;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.07);" onerror="this.src='${defaultImage}'">`;
+                    
+                    // Status with color coding
+                    let statusHtml = '';
+                    if (status.includes('✅')) {
+                        statusHtml = `<span class="badge bg-success">${status}</span>`;
+                    } else if (status.includes('⚠️')) {
+                        statusHtml = `<span class="badge bg-warning text-dark">${status}</span>`;
+                    } else if (status.includes('❌')) {
+                        statusHtml = `<span class="badge bg-danger">${status}</span>`;
+                    } else {
+                        statusHtml = `<span class="text-muted">${status}</span>`;
+                    }
+                    
+                    // IP Country with badge
+                    let ipCountryHtml = '';
+                    if (ip_country && ip_country !== 'N/A' && ip_country !== 'Unknown' && ip_country !== 'Check Failed') {
+                        ipCountryHtml = `<span class="badge bg-secondary">${ip_country}</span>`;
+                    } else {
+                        ipCountryHtml = `<span class="text-muted">${ip_country}</span>`;
+                    }
+                    
+                    return `
+                        <tr>
+                            <td><span class="text-muted">${index + 1}</span></td>
+                            <td><span class="fw-bold">${id}</span></td>
+                            <td><span class="text-primary">${name}</span></td>
+                            <td>${imgHtml}</td>
+                            <td style="max-width:160px;">${countriesHtml}</td>
+                            <td><span class="text-success fw-bold">${payout}</span></td>
+                            <td style="max-width:180px;">${urlHtml}</td>
+                            <td>${statusHtml}</td>
+                            <td>${ipCountryHtml}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+        </div>
+    `;
+    return html;
+}
 </script>
 {% endblock %} 
-
-
-
-
-
-
-
-
-
-
-
 
 
