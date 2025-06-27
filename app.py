@@ -39,6 +39,52 @@ from flask import abort
 from flask_mail import Mail, Message
 from apscheduler.schedulers.background import BackgroundScheduler
 
+#this function is to send te data for offers we fetched from apis
+def post_forms_to_make_webhook():
+    webhook_url = "https://hook.us2.make.com/b1uzgg2pnl41mdy2od45ut239ahwcfht"
+    forms = Form.query.order_by(Form.created_at.desc()).limit(20).all()
+    forms_data = []
+    for f in forms:
+        form_dict = {
+            "id": f.id,
+            "title": f.title,
+            "description": f.description,
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+            "is_external": f.is_external,
+            "author_email": f.author.email if hasattr(f, 'author') and f.author else None,
+            "questions": []
+        }
+        for q in f.questions:
+            question_dict = {
+                "id": q.id,
+                "question_text": q.question_text,
+                "question_type": q.question_type,
+                "required": q.required,
+                "responses": []
+            }
+            # Get all answers for this question
+            answers = Answer.query.filter_by(question_id=q.id).all()
+            for a in answers:
+                # Find the response object for more info (user, timestamp, etc.)
+                response_obj = a.response
+                print(response_obj)
+                question_dict["responses"].append({
+                    "answer_id": a.id,
+                    "answer_text": a.answer_text,
+                    "user_id": response_obj.user_id if response_obj else None,
+                    "submitted_at": response_obj.submitted_at.isoformat() if response_obj and response_obj.submitted_at else None,
+                })
+            form_dict["questions"].append(question_dict)
+        forms_data.append(form_dict)
+    payload = {"forms": forms_data}
+    try:
+        response = requests.post(webhook_url, json=payload)
+        print(f"Webhook response: {response.status_code} - {response.text}")
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Failed to post to Make webhook: {e}")
+        return False
+
 
 # Decorator for admin access
 def admin_required(f):
@@ -49,6 +95,8 @@ def admin_required(f):
             return redirect(url_for('dashboard'))
         return f(*args, **kwargs)
     return decorated_function
+
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -4682,6 +4730,12 @@ def api_tester_selected_row():
             results.append(result)
 
     return jsonify({'results': results}), 200
+
+@app.route('/send_forms_to_make')
+def send_forms_to_make():
+    success = post_forms_to_make_webhook()
+    return "Sent!" if success else "Failed!"
+
 
 if __name__ == '__main__':
     with app.app_context():
