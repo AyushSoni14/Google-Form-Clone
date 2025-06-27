@@ -260,7 +260,6 @@ class PostbackTracking(db.Model):
     
     form = db.relationship('Form', backref='postback_tracking')
 
-# Add this model for storing postback logs
 class PostbackLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tracking_id = db.Column(db.String(100), nullable=False)
