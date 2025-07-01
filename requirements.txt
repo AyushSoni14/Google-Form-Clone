@@ -18,4 +18,4 @@ pymysql
 flask-cors
 APScheduler
 Flask-Mail
-
+aiohttp
