@@ -4621,115 +4621,237 @@ PROXY_CONFIG = {
         'US': {'host': 'us.decodo.com', 'port': 10001},
         'AU': {'host': 'au.decodo.com', 'port': 30001},
         'GB': {'host': 'gb.decodo.com', 'port': 30001},
-        'CA': {'host': 'ca.decodo.com', 'port': 20001}
+        'CA': {'host': 'ca.decodo.com', 'port': 20001},
+        'AF': {'host': 'af.decodo.com', 'port': 36001},
+        'AL': {'host': 'al.decodo.com', 'port': 33001},
+        'AD': {'host': 'ad.decodo.com', 'port': 34001},
+        'AO': {'host': 'ao.decodo.com', 'port': 18001},
+        'AR': {'host': 'ar.decodo.com', 'port': 10001},
+        'AM': {'host': 'am.decodo.com', 'port': 42001},
+        'AW': {'host': 'aw.decodo.com', 'port': 21001},
+        'AT': {'host': 'at.decodo.com', 'port': 35001},
+        'AZ': {'host': 'az.decodo.com', 'port': 30001},
+        'BS': {'host': 'bs.decodo.com', 'port': 17001},
+        'BH': {'host': 'bh.decodo.com', 'port': 37001}
     }
 }
 
 # In-memory storage for URLs
 
 
-def test_url_with_proxy(url, country_code):
-    """Test a single URL with the appropriate proxy and also check IP country"""
-    if country_code not in PROXY_CONFIG['proxy_map']:
-        return {"status": f"❌ No proxy configured for country '{country_code}'", "ip_country": "N/A"}
+# def test_url_with_proxy(url, country_code):
+#     """Test a single URL with the appropriate proxy and also check IP country"""
+#     if country_code not in PROXY_CONFIG['proxy_map']:
+#         return {"status": f"❌ No proxy configured for country '{country_code}'", "ip_country": "N/A"}
     
-    proxy_info = PROXY_CONFIG['proxy_map'][country_code]
-    proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{proxy_info['host']}:{proxy_info['port']}"
+#     proxy_info = PROXY_CONFIG['proxy_map'][country_code]
+#     proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{proxy_info['host']}:{proxy_info['port']}"
     
-    proxies = {
-        'http': proxy_url,
-        'https': proxy_url
-    }
+#     proxies = {
+#         'http': proxy_url,
+#         'https': proxy_url
+#     }
     
-    url_status = ""
-    ip_country = "Unknown"
+#     url_status = ""
+#     ip_country = "Unknown"
     
-    try:
-        # First, test the actual URL
-        response = requests.get(url, proxies=proxies, timeout=30)
+#     try:
+#         # First, test the actual URL
+#         response = requests.get(url, proxies=proxies, timeout=30)
         
-        if response.status_code == 200:
-            url_status = "✅ 200 OK"
-        else:
-            url_status = f"⚠️ Status Code: {response.status_code}"
+#         if response.status_code == 200:
+#             url_status = "✅ 200 OK"
+#         else:
+#             url_status = f"⚠️ Status Code: {response.status_code}"
             
-    except requests.exceptions.Timeout:
-        url_status = "❌ Failed: Timeout"
-    except requests.exceptions.ConnectionError:
-        url_status = "❌ Failed: Connection Error"
-    except requests.exceptions.RequestException as e:
-        url_status = f"❌ Failed: {str(e)}"
-    except Exception as e:
-        url_status = f"❌ Error: {str(e)}"
+#     except requests.exceptions.Timeout:
+#         url_status = "❌ Failed: Timeout"
+#     except requests.exceptions.ConnectionError:
+#         url_status = "❌ Failed: Connection Error"
+#     except requests.exceptions.RequestException as e:
+#         url_status = f"❌ Failed: {str(e)}"
+#     except Exception as e:
+#         url_status = f"❌ Error: {str(e)}"
     
-    # Now check the IP country using the same proxy
+#     # Now check the IP country using the same proxy
+#     try:
+#         ip_check = requests.get('https://ip.decodo.com/json', proxies=proxies, timeout=15)
+#         if ip_check.status_code == 200:
+#             ip_data = ip_check.json()
+#             ip_country = ip_data.get("country", {}).get("name", "Unknown")
+#         else:
+#             ip_country = "Check Failed"
+#     except requests.exceptions.RequestException:
+#         ip_country = "Check Failed"
+#     except Exception:
+#         ip_country = "Check Failed"
+    
+#     return {"status": url_status, "ip_country": ip_country}
+import aiohttp
+import asyncio
+
+async def test_url_with_proxy_async(session, url, proxy_url):
+    """Test a single URL via aiohttp with a proxy."""
+    status_result = "❌ Unknown"
+    ip_country = "Unknown"
+
     try:
-        ip_check = requests.get('https://ip.decodo.com/json', proxies=proxies, timeout=15)
-        if ip_check.status_code == 200:
-            ip_data = ip_check.json()
-            ip_country = ip_data.get("country", {}).get("name", "Unknown")
-        else:
-            ip_country = "Check Failed"
-    except requests.exceptions.RequestException:
-        ip_country = "Check Failed"
+        # 1. Check actual URL
+        async with session.get(url, proxy=proxy_url, timeout=30) as response:
+            if response.status == 200:
+                status_result = "✅ 200 OK"
+            else:
+                status_result = f"⚠️ Status Code: {response.status}"
+    except asyncio.TimeoutError:
+        status_result = "❌ Failed: Timeout"
+    except aiohttp.ClientConnectionError:
+        status_result = "❌ Failed: Connection Error"
+    except Exception as e:
+        status_result = f"❌ Error: {str(e)}"
+
+    try:
+        # 2. Check IP country
+        async with session.get('https://ip.decodo.com/json', proxy=proxy_url, timeout=15) as ip_response:
+            if ip_response.status == 200:
+                ip_data = await ip_response.json()
+                ip_country = ip_data.get("country", {}).get("name", "Unknown")
+            else:
+                ip_country = "Check Failed"
     except Exception:
         ip_country = "Check Failed"
+
+    return status_result, ip_country
+
+
+# @app.route('/api_tester_selectred-row', methods=['POST'])
+# def api_tester_selected_row():
+#     data = request.get_json()
     
-    return {"status": url_status, "ip_country": ip_country}
+#     # New structure: expect array of objects with url and countries
+#     url_country_pairs = data.get('url_country_pairs', [])
+    
+#     # For backward compatibility, also handle the old structure
+#     if not url_country_pairs:
+#         urls = data.get('urls', [])
+#         countries = data.get('countries', [])
+#         # Convert old structure to new structure
+#         url_country_pairs = []
+#         for url in urls:
+#             url_country_pairs.append({
+#                 'url': url,
+#                 'countries': countries
+#             })
+
+#     results = []
+#     for pair in url_country_pairs:
+#         url = pair.get('url')
+#         countries = pair.get('countries', [])
+#         offer_data = pair.get('offer_data', {})  # Include offer data if provided
+        
+#         if not url or not countries:
+#             continue
+            
+#         # Test this URL with only its associated countries
+#         for country in countries:
+#             test_result = test_url_with_proxy(url, country)
+            
+#             # Create result with offer details and proxy test results
+#             result = {
+#                 'url': url,
+#                 'country': country,
+#                 'status': test_result['status'],
+#                 'ip_country': test_result['ip_country']
+#             }
+            
+#             # Add offer details if available
+#             if offer_data:
+#                 result.update({
+#                     'id': offer_data.get('id', 'N/A'),
+#                     'name': offer_data.get('name', 'N/A'),
+#                     'image': offer_data.get('image', ''),
+#                     'countries': offer_data.get('countries', []),
+#                     'payout': offer_data.get('payout', 'N/A')
+#                 })
+            
+#             results.append(result)
+
+#     return jsonify({'results': results}), 200
 
 @app.route('/api_tester_selectred-row', methods=['POST'])
 def api_tester_selected_row():
     data = request.get_json()
-    
-    # New structure: expect array of objects with url and countries
     url_country_pairs = data.get('url_country_pairs', [])
-    
-    # For backward compatibility, also handle the old structure
+
     if not url_country_pairs:
         urls = data.get('urls', [])
         countries = data.get('countries', [])
-        # Convert old structure to new structure
-        url_country_pairs = []
-        for url in urls:
-            url_country_pairs.append({
-                'url': url,
-                'countries': countries
-            })
+        url_country_pairs = [{'url': url, 'countries': countries} for url in urls]
 
-    results = []
-    for pair in url_country_pairs:
-        url = pair.get('url')
-        countries = pair.get('countries', [])
-        offer_data = pair.get('offer_data', {})  # Include offer data if provided
-        
-        if not url or not countries:
-            continue
-            
-        # Test this URL with only its associated countries
-        for country in countries:
-            test_result = test_url_with_proxy(url, country)
-            
-            # Create result with offer details and proxy test results
-            result = {
-                'url': url,
-                'country': country,
-                'status': test_result['status'],
-                'ip_country': test_result['ip_country']
-            }
-            
-            # Add offer details if available
-            if offer_data:
-                result.update({
-                    'id': offer_data.get('id', 'N/A'),
-                    'name': offer_data.get('name', 'N/A'),
-                    'image': offer_data.get('image', ''),
-                    'countries': offer_data.get('countries', []),
-                    'payout': offer_data.get('payout', 'N/A')
-                })
-            
-            results.append(result)
-
+    results = asyncio.run(run_async_proxy_checks(url_country_pairs))
     return jsonify({'results': results}), 200
+
+async def run_async_proxy_checks(url_country_pairs):
+    results = []
+    tasks = []
+
+    connector = aiohttp.TCPConnector(limit=20)  # controls max open connections
+    timeout = aiohttp.ClientTimeout(total=60)
+
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        for pair in url_country_pairs:
+            url = pair.get('url')
+            countries = pair.get('countries', [])
+            offer_data = pair.get('offer_data', {})
+
+            if not url or not countries:
+                continue
+
+            for country in countries:
+                proxy_cfg = PROXY_CONFIG['proxy_map'].get(country)
+                if not proxy_cfg:
+                    results.append({
+                        'url': url,
+                        'country': country,
+                        'status': f"❌ No proxy configured for '{country}'",
+                        'ip_country': "N/A"
+                    })
+                    continue
+
+                proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{proxy_cfg['host']}:{proxy_cfg['port']}"
+                task = asyncio.create_task(
+                    test_url_with_proxy_async(session, url, proxy_url)
+                )
+                tasks.append((task, url, country, offer_data))
+
+        for task, url, country, offer_data in tasks:
+            try:
+                status, ip_country = await task
+                result = {
+                    'url': url,
+                    'country': country,
+                    'status': status,
+                    'ip_country': ip_country
+                }
+                if offer_data:
+                    result.update({
+                        'id': offer_data.get('id', 'N/A'),
+                        'name': offer_data.get('name', 'N/A'),
+                        'image': offer_data.get('image', ''),
+                        'countries': offer_data.get('countries', []),
+                        'payout': offer_data.get('payout', 'N/A')
+                    })
+                results.append(result)
+            except Exception as e:
+                results.append({
+                    'url': url,
+                    'country': country,
+                    'status': f"❌ Error: {str(e)}",
+                    'ip_country': "Check Failed"
+                })
+
+    return results
+
+
 
 @app.route('/send_forms_to_make')
 def send_forms_to_make():
