@@ -588,25 +588,41 @@ function renderPretty(data) {
     // Helper function to extract country codes from name
     function extractCountriesFromName(name) {
         if (!name || typeof name !== 'string') return [];
+    
+    // Common country codes - you can expand this list
+    const validCountryCodes = new Set([
+        'US', 'CA', 'GB', 'AU', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'CH', 'AT', 'SE', 'NO', 'DK', 'FI',
+        'PL', 'CZ', 'SK', 'HU', 'RO', 'BG', 'HR', 'SI', 'EE', 'LV', 'LT', 'PT', 'GR', 'IE', 'LU',
+        'MT', 'CY', 'BR', 'MX', 'AR', 'CL', 'CO', 'PE', 'VE', 'EC', 'BO', 'PY', 'UY', 'GY', 'SR',
+        'JP', 'KR', 'CN', 'IN', 'TH', 'VN', 'MY', 'SG', 'PH', 'ID', 'TW', 'HK', 'MO', 'BD', 'PK',
+        'LK', 'NP', 'MM', 'KH', 'LA', 'BN', 'MN', 'KZ', 'UZ', 'TM', 'TJ', 'KG', 'AF', 'IR', 'IQ',
+        'TR', 'SA', 'AE', 'QA', 'BH', 'KW', 'OM', 'YE', 'JO', 'LB', 'SY', 'IL', 'PS', 'EG', 'LY',
+        'TN', 'DZ', 'MA', 'SD', 'ET', 'KE', 'UG', 'TZ', 'RW', 'BI', 'DJ', 'SO', 'ER', 'SS', 'CF',
+        'TD', 'CM', 'NG', 'NE', 'BF', 'ML', 'SN', 'GM', 'GW', 'GN', 'SL', 'LR', 'CI', 'GH', 'TG',
+        'BJ', 'GA', 'GQ', 'ST', 'AO', 'CD', 'CG', 'ZM', 'ZW', 'BW', 'NA', 'SZ', 'LS', 'MW', 'MZ',
+        'MG', 'MU', 'SC', 'KM', 'ZA', 'RU', 'UA', 'BY', 'MD', 'GE', 'AM', 'AZ', 'AL', 'BA', 'ME',
+        'MK', 'RS', 'XK', 'IS', 'FO'
+    ]);
+    
+    // Split by underscore and get all parts
+    const parts = name.split('_');
+    
+    // Get the last few parts that could be country codes
+    const countryCodes = [];
+    
+    for (let i = parts.length - 1; i >= 0; i--) {
+        const part = parts[i].trim();
         
-        // Look for patterns like _NL_CH_SE_DK_NO_FI_DE_AT or similar
-        // This regex looks for 2-3 letter country codes after underscores
-        const countryCodePattern = /_([A-Z]{2,3})(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*(?:_([A-Z]{2,3}))*/g;
-        
-        const matches = [];
-        let match;
-        
-        while ((match = countryCodePattern.exec(name)) !== null) {
-            // Extract all captured groups (country codes)
-            for (let i = 1; i < match.length; i++) {
-                if (match[i] && match[i].length >= 2) {
-                    matches.push(match[i]);
-                }
-            }
+        // Check if this part is exactly 2 capital letters AND a valid country code
+        if (/^[A-Z]{2}$/.test(part) && validCountryCodes.has(part)) {
+            countryCodes.unshift(part); // Add to beginning to maintain order
+        } else {
+            // Stop when we encounter a part that's not a valid country code
+           // break;
         }
-        
-        // Remove duplicates and return
-        return [...new Set(matches)];
+    }
+    
+    return countryCodes;
     }
     
     // Function to create offer card
@@ -848,6 +864,8 @@ const headerHtml = `
 
 function renderTable(data) {
     // Deep search function to find all offer-related data
+    // Add this line after the existing variable declarations
+    let selectedOfferIndices = new Set();
     function deepSearchOffers(obj, path = '', visited = new Set()) {
         if (!obj || typeof obj !== 'object' || visited.has(obj)) {
             return [];
@@ -1115,37 +1133,41 @@ function renderTable(data) {
     // Helper function to extract country codes from name
     function extractCountriesFromName(name) {
         if (!name || typeof name !== 'string') return [];
+    
+    // Common country codes - you can expand this list
+    const validCountryCodes = new Set([
+        'US', 'CA', 'GB', 'AU', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'CH', 'AT', 'SE', 'NO', 'DK', 'FI',
+        'PL', 'CZ', 'SK', 'HU', 'RO', 'BG', 'HR', 'SI', 'EE', 'LV', 'LT', 'PT', 'GR', 'IE', 'LU',
+        'MT', 'CY', 'BR', 'MX', 'AR', 'CL', 'CO', 'PE', 'VE', 'EC', 'BO', 'PY', 'UY', 'GY', 'SR',
+        'JP', 'KR', 'CN', 'IN', 'TH', 'VN', 'MY', 'SG', 'PH', 'ID', 'TW', 'HK', 'MO', 'BD', 'PK',
+        'LK', 'NP', 'MM', 'KH', 'LA', 'BN', 'MN', 'KZ', 'UZ', 'TM', 'TJ', 'KG', 'AF', 'IR', 'IQ',
+        'TR', 'SA', 'AE', 'QA', 'BH', 'KW', 'OM', 'YE', 'JO', 'LB', 'SY', 'IL', 'PS', 'EG', 'LY',
+        'TN', 'DZ', 'MA', 'SD', 'ET', 'KE', 'UG', 'TZ', 'RW', 'BI', 'DJ', 'SO', 'ER', 'SS', 'CF',
+        'TD', 'CM', 'NG', 'NE', 'BF', 'ML', 'SN', 'GM', 'GW', 'GN', 'SL', 'LR', 'CI', 'GH', 'TG',
+        'BJ', 'GA', 'GQ', 'ST', 'AO', 'CD', 'CG', 'ZM', 'ZW', 'BW', 'NA', 'SZ', 'LS', 'MW', 'MZ',
+        'MG', 'MU', 'SC', 'KM', 'ZA', 'RU', 'UA', 'BY', 'MD', 'GE', 'AM', 'AZ', 'AL', 'BA', 'ME',
+        'MK', 'RS', 'XK', 'IS', 'FO'
+    ]);
+    
+    // Split by underscore and get all parts
+    const parts = name.split('_');
+    
+    // Get the last few parts that could be country codes
+    const countryCodes = [];
+    
+    for (let i = parts.length - 1; i >= 0; i--) {
+        const part = parts[i].trim();
         
-        // Look for patterns like _CPA_NL_CH_SE_DK_NO_FI_DE_AT
-        // First find the CPA pattern
-        const cpaIndex = name.indexOf('_CPA');
-        if (cpaIndex !== -1) {
-            const afterCpa = name.substring(cpaIndex + 4); // +4 to skip '_CPA'
-            
-            // Extract 2-letter country codes after CPA
-            const countryMatches = afterCpa.match(/_[A-Z]{2}/g);
-            if (countryMatches) {
-                return countryMatches.map(match => match.substring(1)); // Remove the underscore
-            }
+        // Check if this part is exactly 2 capital letters AND a valid country code
+        if (/^[A-Z]{2}$/.test(part) && validCountryCodes.has(part)) {
+            countryCodes.unshift(part); // Add to beginning to maintain order
+        } else {
+            // Stop when we encounter a part that's not a valid country code
+          //  break;
         }
-        
-        // Fallback: look for any 2-letter country codes after underscores
-        const countryCodePattern = /_([A-Z]{2})(?:_([A-Z]{2}))*(?:_([A-Z]{2}))*(?:_([A-Z]{2}))*(?:_([A-Z]{2}))*(?:_([A-Z]{2}))*(?:_([A-Z]{2}))*/g;
-        
-        const matches = [];
-        let match;
-        
-        while ((match = countryCodePattern.exec(name)) !== null) {
-            // Extract all captured groups (country codes)
-            for (let i = 1; i < match.length; i++) {
-                if (match[i] && match[i].length === 2) {
-                    matches.push(match[i]);
-                }
-            }
-        }
-        
-        // Remove duplicates and return
-        return [...new Set(matches)];
+    }
+    
+    return countryCodes;
     }
 
     // Helper to extract url/preview url
@@ -1294,8 +1316,8 @@ function renderTable(data) {
             let viewDetailsBtn = `<button class="btn btn-sm btn-outline-primary view-details-btn" data-offer-index="${globalIndex}">View Details</button>`;
             
             // Add checkbox for selection
-            let checkbox = `<input type="checkbox" class="offer-row-checkbox" data-offer-index="${globalIndex}">`;
-            
+            // let checkbox = `<input type="checkbox" class="offer-row-checkbox" data-offer-index="${globalIndex}">`;
+            let checkbox = `<input type="checkbox" class="offer-row-checkbox" data-offer-index="${globalIndex}" ${selectedOfferIndices.has(globalIndex) ? 'checked' : ''}>`;
             return `
                 <tr>
                     <td>${checkbox}</td>
@@ -1486,14 +1508,23 @@ function renderTable(data) {
         const pageNum = document.getElementById('offers-page-num');
         const totalPagesSpan = document.getElementById('offers-total-pages');
 
+        // function updateTable(page) {
+        //     if (tbody) tbody.innerHTML = renderTableRows(page);
+        //     if (pageNum) pageNum.textContent = page;
+        //     if (totalPagesSpan) totalPagesSpan.textContent = totalPages;
+        //     if (prevBtn) prevBtn.disabled = page === 1;
+        //     if (nextBtn) nextBtn.disabled = page === totalPages;
+        //     setupViewDetailsHandlers(); // re-setup handlers after table rerender
+        // }
         function updateTable(page) {
-            if (tbody) tbody.innerHTML = renderTableRows(page);
-            if (pageNum) pageNum.textContent = page;
-            if (totalPagesSpan) totalPagesSpan.textContent = totalPages;
-            if (prevBtn) prevBtn.disabled = page === 1;
-            if (nextBtn) nextBtn.disabled = page === totalPages;
-            setupViewDetailsHandlers(); // re-setup handlers after table rerender
-        }
+           if (tbody) tbody.innerHTML = renderTableRows(page);
+           if (pageNum) pageNum.textContent = page;
+           if (totalPagesSpan) totalPagesSpan.textContent = totalPages;
+           if (prevBtn) prevBtn.disabled = page === 1;
+           if (nextBtn) nextBtn.disabled = page === totalPages;
+           setupViewDetailsHandlers(); // re-setup handlers after table rerender
+           setupCheckboxHandlers(); // Add this line to re-setup checkbox handlers
+           }
 
         if (prevBtn) {
             prevBtn.onclick = function() {
@@ -1568,46 +1599,98 @@ function renderTable(data) {
             });
         }
         setupViewDetailsHandlers();
-
+        // Add checkbox change event listeners to preserve selections
+        function setupCheckboxHandlers() {
+          const checkboxes = document.querySelectorAll('.offer-row-checkbox');
+          checkboxes.forEach(cb => {
+          cb.addEventListener('change', function() {
+            const offerIndex = parseInt(this.getAttribute('data-offer-index'));
+            if (this.checked) {
+                selectedOfferIndices.add(offerIndex);
+            } else {
+                selectedOfferIndices.delete(offerIndex);
+            }
+         });
+       });
+      }
+setupCheckboxHandlers();
         // Add select all functionality
-        const selectAll = document.getElementById('select-all-offers');
-        if (selectAll) {
-            selectAll.onclick = function() {
-                const checkboxes = document.querySelectorAll('.offer-row-checkbox');
-                checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
-            };
-        }
+        // const selectAll = document.getElementById('select-all-offers');
+        // if (selectAll) {
+        //     selectAll.onclick = function() {
+        //         const checkboxes = document.querySelectorAll('.offer-row-checkbox');
+        //         checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+        //     };
+        // }
+        // Replace the existing select-all logic with this:
+const selectAll = document.getElementById('select-all-offers');
+if (selectAll) {
+    selectAll.onclick = function() {
+        const checkboxes = document.querySelectorAll('.offer-row-checkbox');
+        checkboxes.forEach(cb => { 
+            cb.checked = selectAll.checked;
+            const offerIndex = parseInt(cb.getAttribute('data-offer-index'));
+            if (selectAll.checked) {
+                selectedOfferIndices.add(offerIndex);
+            } else {
+                selectedOfferIndices.delete(offerIndex);
+            }
+        });
+    };
+}
         // Check URL button logic
         const checkUrlBtn = document.getElementById('check-url-btn');
         if (checkUrlBtn) {
             checkUrlBtn.onclick = function() {
-                const checkboxes = document.querySelectorAll('.offer-row-checkbox:checked');
+                // const checkboxes = document.querySelectorAll('.offer-row-checkbox:checked');
+                // Get all selected offers from the Set, not just currently visible checkboxes
+                const selectedIndices = Array.from(selectedOfferIndices);
                 const url_country_pairs = [];
                 
-                checkboxes.forEach(cb => {
-                    const idx = parseInt(cb.getAttribute('data-offer-index'));
-                    const offer = filteredOffers[idx];
-                    if (!offer) return;
+                // checkboxes.forEach(cb => {
+                //     const idx = parseInt(cb.getAttribute('data-offer-index'));
+                //     const offer = filteredOffers[idx];
+                //     if (!offer) return;
                     
-                    const url = getUrl(offer.offerData, offer.completeData);
-                    const countries = getCountries(offer.completeData);
+                //     const url = getUrl(offer.offerData, offer.completeData);
+                //     const countries = getCountries(offer.completeData);
                     
-                    if (url && countries && countries.length > 0) {
-                        // Include offer details in the request
-                        url_country_pairs.push({
-                            url: url,
-                            countries: countries,
-                            offer_data: {
-                                id: getId(offer.offerData, offer.completeData),
-                                name: getName(offer.offerData, offer.completeData),
-                                image: getImage(offer.offerData, offer.completeData),
-                                countries: countries,
-                                payout: getPayout(offer.completeData)
-                            }
-                        });
-                    }
-                });
-                
+                //     if (url && countries && countries.length > 0) {
+                //         // Include offer details in the request
+                //         url_country_pairs.push({
+                //             url: url,
+                //             countries: countries,
+                //             offer_data: {
+                //                 id: getId(offer.offerData, offer.completeData),
+                //                 name: getName(offer.offerData, offer.completeData),
+                //                 image: getImage(offer.offerData, offer.completeData),
+                //                 countries: countries,
+                //                 payout: getPayout(offer.completeData)
+                //             }
+                //         });
+                //     }
+                // });
+                selectedIndices.forEach(idx => {
+    const offer = allOffers[idx]; // Use allOffers instead of filteredOffers
+    if (!offer) return;
+    
+    const url = getUrl(offer.offerData, offer.completeData);
+    const countries = getCountries(offer.completeData);
+    
+    if (url && countries && countries.length > 0) {
+        url_country_pairs.push({
+            url: url,
+            countries: countries,
+            offer_data: {
+                id: getId(offer.offerData, offer.completeData),
+                name: getName(offer.offerData, offer.completeData),
+                image: getImage(offer.offerData, offer.completeData),
+                countries: countries,
+                payout: getPayout(offer.completeData)
+            }
+        });
+    }
+});
                 if (url_country_pairs.length === 0) {
                     alert('Please select at least one row with valid URL and countries.');
                     return;
@@ -1882,5 +1965,4 @@ function renderProxyTestResultsTable(results) {
 }
 </script>
 {% endblock %} 
-
 
