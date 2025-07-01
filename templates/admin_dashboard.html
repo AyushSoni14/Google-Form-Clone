@@ -586,10 +586,11 @@ function renderPretty(data) {
     }
     
     // Helper function to extract country codes from name
-    function extractCountriesFromName(name) {
-        if (!name || typeof name !== 'string') return [];
+  // Helper function to extract country codes from name
+function extractCountriesFromName(name) {
+    if (!name || typeof name !== 'string') return [];
     
-    // Common country codes - you can expand this list
+    // Common country codes - expand as needed
     const validCountryCodes = new Set([
         'US', 'CA', 'GB', 'AU', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'CH', 'AT', 'SE', 'NO', 'DK', 'FI',
         'PL', 'CZ', 'SK', 'HU', 'RO', 'BG', 'HR', 'SI', 'EE', 'LV', 'LT', 'PT', 'GR', 'IE', 'LU',
@@ -604,8 +605,8 @@ function renderPretty(data) {
         'MK', 'RS', 'XK', 'IS', 'FO'
     ]);
     
-    // Split by underscore and get all parts
-    const parts = name.split('_');
+    // Split by multiple separators: underscore, hyphen, slash, pipe, comma, semicolon, space
+    const parts = name.split(/[_\-\/\|,;\s]+/);
     
     // Get the last few parts that could be country codes
     const countryCodes = [];
@@ -613,17 +614,20 @@ function renderPretty(data) {
     for (let i = parts.length - 1; i >= 0; i--) {
         const part = parts[i].trim();
         
+        // Skip empty parts
+        if (!part) continue;
+        
         // Check if this part is exactly 2 capital letters AND a valid country code
         if (/^[A-Z]{2}$/.test(part) && validCountryCodes.has(part)) {
             countryCodes.unshift(part); // Add to beginning to maintain order
         } else {
             // Stop when we encounter a part that's not a valid country code
-           // break;
+            break;
         }
     }
     
     return countryCodes;
-    }
+}
     
     // Function to create offer card
     function createOfferCard(offerInfo, index) {
@@ -1131,10 +1135,11 @@ function renderTable(data) {
     }
 
     // Helper function to extract country codes from name
-    function extractCountriesFromName(name) {
-        if (!name || typeof name !== 'string') return [];
+  // Helper function to extract country codes from name
+function extractCountriesFromName(name) {
+    if (!name || typeof name !== 'string') return [];
     
-    // Common country codes - you can expand this list
+    // Common country codes - expand as needed
     const validCountryCodes = new Set([
         'US', 'CA', 'GB', 'AU', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'CH', 'AT', 'SE', 'NO', 'DK', 'FI',
         'PL', 'CZ', 'SK', 'HU', 'RO', 'BG', 'HR', 'SI', 'EE', 'LV', 'LT', 'PT', 'GR', 'IE', 'LU',
@@ -1149,8 +1154,8 @@ function renderTable(data) {
         'MK', 'RS', 'XK', 'IS', 'FO'
     ]);
     
-    // Split by underscore and get all parts
-    const parts = name.split('_');
+    // Split by multiple separators: underscore, hyphen, slash, pipe, comma, semicolon, space
+    const parts = name.split(/[_\-\/\|,;\s]+/);
     
     // Get the last few parts that could be country codes
     const countryCodes = [];
@@ -1158,17 +1163,20 @@ function renderTable(data) {
     for (let i = parts.length - 1; i >= 0; i--) {
         const part = parts[i].trim();
         
+        // Skip empty parts
+        if (!part) continue;
+        
         // Check if this part is exactly 2 capital letters AND a valid country code
         if (/^[A-Z]{2}$/.test(part) && validCountryCodes.has(part)) {
             countryCodes.unshift(part); // Add to beginning to maintain order
         } else {
             // Stop when we encounter a part that's not a valid country code
-          //  break;
+            break;
         }
     }
     
     return countryCodes;
-    }
+}
 
     // Helper to extract url/preview url
     function getUrl(offerData, completeData) {
