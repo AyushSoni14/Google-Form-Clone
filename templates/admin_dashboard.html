@@ -1896,6 +1896,7 @@ function renderProxyTestResultsTable(results) {
                     <th style="min-width:120px;">URL / Details</th>
                     <th style="min-width:100px;">Status</th>
                     <th style="min-width:100px;">IP Country</th>
+                    <th style="min-width:80px;">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -1962,6 +1963,16 @@ function renderProxyTestResultsTable(results) {
                             <td style="max-width:180px;">${urlHtml}</td>
                             <td>${statusHtml}</td>
                             <td>${ipCountryHtml}</td>
+                       <td>
+    <button 
+        class="btn btn-sm btn-outline-success add-offer-btn"
+        data-id="${id}" 
+        data-name="${name}" 
+        data-image="${image}" 
+        data-url="${url}">
+        Add
+    </button>
+</td>
                         </tr>
                     `;
                 }).join('')}
@@ -1970,7 +1981,43 @@ function renderProxyTestResultsTable(results) {
         </div>
     `;
     return html;
+    
 }
+document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList.contains('add-offer-btn')) {
+        const btn = e.target;
+
+        const offerData = {
+            offer_id: btn.getAttribute('data-id'),
+            offer_name: btn.getAttribute('data-name'),
+            image_url: btn.getAttribute('data-image'),
+            target_url: btn.getAttribute('data-url'),
+        };
+
+        fetch('/add_offer_to_table', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(offerData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                btn.innerText = 'Added';
+                btn.classList.remove('btn-outline-success');
+                btn.classList.add('btn-success');
+                btn.disabled = true;
+            } else {
+                alert('❌ Failed to add: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('❌ Network error while adding offer.');
+        });
+    }
+});
 </script>
 {% endblock %} 
 
