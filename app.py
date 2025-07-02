@@ -212,6 +212,14 @@ def datetime_filter(date):
 app.jinja_env.filters['datetime'] = datetime_filter
 
 # Models
+class OffersFromUrlTester(db.Model):
+    __tablename__ = 'offers_from_url_tester'
+
+    my_row_id = db.Column(db.BigInteger, primary_key=True)
+    offer_name = db.Column(db.String(255))
+    offer_id = db.Column(db.String(100))
+    image_url = db.Column(db.Text)
+    target_url = db.Column(db.Text)
 class PostbackTesterJob(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -4851,7 +4859,33 @@ async def run_async_proxy_checks(url_country_pairs):
 
     return results
 
+@app.route('/add_offer_to_table', methods=['POST'])
+def add_offer_to_table():
+    data = request.get_json()
+    offer_id = data.get('offer_id')
 
+    # Check if the offer already exists
+    existing_offer = OffersFromUrlTester.query.filter_by(offer_id=offer_id).first()
+
+    if existing_offer:
+        # Already exists, don't insert again
+        return jsonify({'success': True, 'message': 'Offer already exists'})
+
+    # Insert new offer
+    offer = OffersFromUrlTester(
+        offer_name=data.get('offer_name'),
+        offer_id=offer_id,
+        image_url=data.get('image_url'),
+        target_url=data.get('target_url')
+    )
+
+    try:
+        db.session.add(offer)
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Offer added'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/send_forms_to_make')
 def send_forms_to_make():
