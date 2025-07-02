@@ -1410,6 +1410,9 @@ function extractCountriesFromName(name) {
                 <button type="button" class="btn btn-success btn-sm" id="check-url-btn">
                     <i class="fas fa-link me-1"></i>Check URL
                 </button>
+                 <button type="button" class="btn btn-success btn-sm" id="select-all-offer-btn">
+                    <i class="fas fa-link me-1"></i>Select ALL Offers
+                </button>
                 <span class="ms-2 text-muted small">(Select rows to check their URLs)</span>
             </div>
         </div>
@@ -1631,6 +1634,39 @@ setupCheckboxHandlers();
         //     };
         // }
         // Replace the existing select-all logic with this:
+     const selectAllOfferBtn = document.getElementById('select-all-offer-btn');
+        let allSelected = false;
+if (selectAllOfferBtn) {
+    selectAllOfferBtn.onclick = function() {
+    //     const checkboxes = document.querySelectorAll('.offer-row-checkbox');
+    //     checkboxes.forEach(cb => { 
+    //         cb.checked = selectAll.checked;
+    //         const offerIndex = parseInt(cb.getAttribute('data-offer-index'));
+    //         if (selectAll.checked) {
+    //             selectedOfferIndices.add(offerIndex);
+    //         } else {
+    //             selectedOfferIndices.delete(offerIndex);
+    //         }
+    //     });
+    // };
+    allSelected = !allSelected;
+      if ( allSelected ) {
+        
+            // Select all offers across all pages
+            selectedOfferIndices = new Set(Array.from({length: allOffers.length}, (_, i) => i));
+            selectAllOfferBtn.textContent = "Deselect ALL Offers";
+        } else {
+            // Deselect all
+            selectedOfferIndices.clear();
+            selectAllOfferBtn.textContent = "Select ALL Offers";
+        }
+        // Update checkboxes on the current page to reflect the new state
+        const checkboxes = document.querySelectorAll('.offer-row-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = allSelected;
+        });
+    };
+}  
 const selectAll = document.getElementById('select-all-offers');
 if (selectAll) {
     selectAll.onclick = function() {
@@ -1679,7 +1715,7 @@ if (selectAll) {
                 //     }
                 // });
                 selectedIndices.forEach(idx => {
-    const offer = allOffers[idx]; // Use allOffers instead of filteredOffers
+    const offer = filteredOffers[idx]; // Use allOffers instead of filteredOffers
     if (!offer) return;
     
     const url = getUrl(offer.offerData, offer.completeData);
