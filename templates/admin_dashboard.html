@@ -352,6 +352,7 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 
 function renderPretty(data) {
+    
      // Deep search function to find all offer-related data
     function deepSearchOffers(obj, path = '', visited = new Set()) {
         if (!obj || typeof obj !== 'object' || visited.has(obj)) {
@@ -1471,7 +1472,9 @@ function extractCountriesFromName(name) {
         // Initial render
         const tbody = document.getElementById('offers-table-body');
         if (tbody) tbody.innerHTML = renderTableRows(currentPage);
-
+        setTimeout(() => {
+    window.scrollBy({ top: 300, left: 0, behavior: 'smooth' });
+}, 200);  // delay allows DOM update before scroll
         // Filter functionality
         function applyFilters() {
             const filters = {
@@ -1909,8 +1912,9 @@ document.getElementById('adminApiTestForm').addEventListener('submit', function(
 });
 
 window.latestApiData = null;
-
+// let lastProxyTestResults = [];
 function renderProxyTestResultsTable(results) {
+  //  lastProxyTestResults = results;
     // Use a fast-loading SVG default image (very small, inline, no text)
     const defaultImage = 'https://offery.io/files/offers/offer-9mzcxpqvm.png';
     
@@ -1919,10 +1923,12 @@ function renderProxyTestResultsTable(results) {
             <h5 class="mb-0">Proxy Test Results</h5>
             <button class="btn btn-outline-primary btn-sm" id="back-to-offers-table">Back to Offers Table</button>
         </div>
+        <button class="btn btn-primary btn-sm" id="add-selected-offers">Add Selected</button>
         <div class="table-responsive">
         <table class="table table-hover align-middle shadow-sm" style="border-radius: 12px; overflow: hidden;">
             <thead class="table-primary">
                 <tr>
+                    <th><input type="checkbox" id="select-all-offers"></th>
                     <th style="min-width:30px;">#</th>
                     <th style="min-width:60px;">ID</th>
                     <th style="min-width:120px;">Name</th>
@@ -1990,6 +1996,14 @@ function renderProxyTestResultsTable(results) {
                     
                     return `
                         <tr>
+                            <td>
+    <input type="checkbox" class="form-check-input offer-checkbox" 
+        data-id="${id}" 
+        data-name="${name}" 
+        data-image="${image}" 
+        data-url="${url}">
+</td>
+
                             <td><span class="text-muted">${index + 1}</span></td>
                             <td><span class="fw-bold">${id}</span></td>
                             <td><span class="text-primary">${name}</span></td>
@@ -2020,40 +2034,580 @@ function renderProxyTestResultsTable(results) {
     
 }
 document.addEventListener('click', function(e) {
-    if (e.target && e.target.classList.contains('add-offer-btn')) {
-        const btn = e.target;
+   // Handle single add
+//    if (e.target && e.target.classList.contains('add-offer-btn')) {
+//         const btn = e.target;
+//         const offerData = {
+//             offer_id: btn.getAttribute('data-id'),
+//             offer_name: btn.getAttribute('data-name'),
+//             image_url: btn.getAttribute('data-image'),
+//             target_url: btn.getAttribute('data-url'),
+//         };
 
-        const offerData = {
-            offer_id: btn.getAttribute('data-id'),
-            offer_name: btn.getAttribute('data-name'),
-            image_url: btn.getAttribute('data-image'),
-            target_url: btn.getAttribute('data-url'),
-        };
+//         fetch('/add_offer_to_table', {
+//             method: 'POST',
+//             headers: { 'Content-Type': 'application/json' },
+//             body: JSON.stringify(offerData)
+//         })
+//         .then(response => response.json())
+//         .then(data => {
+//             if (data.success) {
+//                 btn.innerText = 'Added';
+//                 btn.classList.remove('btn-outline-success');
+//                 btn.classList.add('btn-success');
+//                 btn.disabled = true;
+//             } else {
+//                 alert('❌ Failed to add: ' + (data.error || 'Unknown error'));
+//             }
+//         })
+//         .catch(err => {
+//             console.error(err);
+//             alert('❌ Network error while adding offer.');
+//         });
+//     }
+if (e.target && e.target.classList.contains('add-offer-btn')) {
+    const btn = e.target;
+    const originalText = btn.innerText;
+    const originalClasses = btn.className;
+    
+    // Show loading animation
+    btn.innerHTML = `
+        <span class="d-flex align-items-center justify-content-center">
+            <span class="spinner-border spinner-border-sm me-2" role="status" style="width: 16px; height: 16px;">
+                <span class="visually-hidden">Loading...</span>
+            </span>
+            Adding...
+        </span>
+    `;
+    btn.disabled = true;
+    
+    const offerData = {
+        offer_id: btn.getAttribute('data-id'),
+        offer_name: btn.getAttribute('data-name'),
+        image_url: btn.getAttribute('data-image'),
+        target_url: btn.getAttribute('data-url'),
+    };
 
-        fetch('/add_offer_to_table', {
+    fetch('/add_offer_to_table', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(offerData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Play success sound
+            playSuccessSound();
+            
+            // Step 1: Remove loading and show only checkmark first
+            btn.classList.remove('btn-outline-success');
+            btn.classList.add('btn-success');
+            
+            // Show only the checkmark with animation
+            btn.innerHTML = `
+                <span class="d-flex align-items-center justify-content-center">
+                    <i class="fas fa-check" style="
+                        animation: checkAppear 0.6s ease-out;
+                        transform: scale(0);
+                        animation-fill-mode: forwards;
+                    "></i>
+                </span>
+            `;
+            
+            // Step 2: After checkmark animation completes, show "Added" text
+            setTimeout(() => {
+                btn.innerHTML = `
+                    <span class="d-flex align-items-center justify-content-center">
+                        <i class="fas fa-check me-2"></i>
+                        <span style="animation: textSlideIn 0.4s ease-out;">Added</span>
+                    </span>
+                `;
+            }, 600); // Wait for checkmark animation to complete
+            
+            btn.disabled = true;
+            
+        } else {
+            // Play error sound
+            playErrorSound();
+            
+            // Error animation - X icon first, then "Failed" text
+            btn.classList.remove('btn-outline-success');
+            btn.classList.add('btn-danger');
+            
+            // Show only X icon first
+            btn.innerHTML = `
+                <span class="d-flex align-items-center justify-content-center">
+                    <i class="fas fa-times" style="
+                        animation: errorAppear 0.5s ease-out;
+                        transform: scale(0);
+                        animation-fill-mode: forwards;
+                    "></i>
+                </span>
+            `;
+            
+            // Then show "Failed" text
+            setTimeout(() => {
+                btn.innerHTML = `
+                    <span class="d-flex align-items-center justify-content-center">
+                        <i class="fas fa-times me-2"></i>
+                        <span style="animation: textSlideIn 0.4s ease-out;">Failed</span>
+                    </span>
+                `;
+            }, 500);
+            
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.className = originalClasses;
+                btn.disabled = false;
+            }, 2500);
+            
+            alert('❌ Failed to add: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        
+        // Play network error sound
+        playNetworkErrorSound();
+        
+        // Network error - warning icon first, then text
+        btn.classList.remove('btn-outline-success');
+        btn.classList.add('btn-warning');
+        
+        // Show only warning icon first
+        btn.innerHTML = `
+            <span class="d-flex align-items-center justify-content-center">
+                <i class="fas fa-exclamation-triangle" style="
+                    animation: warningAppear 0.5s ease-out;
+                    transform: scale(0);
+                    animation-fill-mode: forwards;
+                "></i>
+            </span>
+        `;
+        
+        // Then show "Error" text
+        setTimeout(() => {
+            btn.innerHTML = `
+                <span class="d-flex align-items-center justify-content-center">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span style="animation: textSlideIn 0.4s ease-out;">Error</span>
+                </span>
+            `;
+        }, 500);
+        
+        // Reset button after 3 seconds
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.className = originalClasses;
+            btn.disabled = false;
+        }, 3500);
+        
+        alert('❌ Network error while adding offer.');
+    });
+}
+
+// Sound effect functions
+function playSuccessSound() {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Pleasant success chord (C-E-G)
+        const frequencies = [523, 659, 784];
+        
+        frequencies.forEach((freq, index) => {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.15, audioContext.currentTime + 0.1);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.6);
+            
+            oscillator.start(audioContext.currentTime + index * 0.1);
+            oscillator.stop(audioContext.currentTime + 0.6);
+        });
+    } catch (error) {
+        console.log('Success audio not supported');
+    }
+}
+
+function playErrorSound() {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Error sound - descending notes
+        const frequencies = [400, 300, 200];
+        
+        frequencies.forEach((freq, index) => {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+            oscillator.type = 'sawtooth';
+            
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime + index * 0.1);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        });
+    } catch (error) {
+        console.log('Error audio not supported');
+    }
+}
+
+function playNetworkErrorSound() {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Network error - warning beep pattern
+        const frequency = 800;
+        
+        for (let i = 0; i < 2; i++) {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            oscillator.type = 'square';
+            
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.08, audioContext.currentTime + 0.05);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.15);
+            
+            oscillator.start(audioContext.currentTime + i * 0.2);
+            oscillator.stop(audioContext.currentTime + 0.15 + i * 0.2);
+        }
+    } catch (error) {
+        console.log('Network error audio not supported');
+    }
+}
+
+// Add CSS animations if not already present
+if (!document.querySelector('#button-animations-style')) {
+    const style = document.createElement('style');
+    style.id = 'button-animations-style';
+    style.textContent = `
+        @keyframes checkAppear {
+            0% {
+                transform: scale(0) rotate(-180deg);
+                opacity: 0;
+            }
+            70% {
+                transform: scale(1.2) rotate(-10deg);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes errorAppear {
+            0% {
+                transform: scale(0) rotate(-90deg);
+                opacity: 0;
+            }
+            70% {
+                transform: scale(1.2) rotate(10deg);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes warningAppear {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.3);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes textSlideIn {
+            0% {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .spinner-border {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+        
+        .add-offer-btn {
+            transition: all 0.3s ease;
+            min-width: 80px; /* Prevent button size jumping */
+        }
+    `;
+    document.head.appendChild(style);
+}
+    // Handle add selected
+    if (e.target && e.target.id === 'add-selected-offers') {
+        const checkboxes = document.querySelectorAll('.offer-checkbox:checked');
+        const selectedOffers = [];
+
+        checkboxes.forEach(cb => {
+            selectedOffers.push({
+                id: cb.getAttribute('data-id'),
+                name: cb.getAttribute('data-name'),
+                image: cb.getAttribute('data-image'),
+                url: cb.getAttribute('data-url')
+            });
+        });
+
+        if (selectedOffers.length === 0) {
+            alert('No offers selected.');
+            return;
+        }
+        adminTableResult.innerHTML = `
+                    <div class="d-flex justify-content-center align-items-center" style="min-height: 300px;">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <h5 class="text-muted">Adding the selected Offers...</h5>
+                            <p class="text-muted small">This may take a few moments depending on the number of offers.</p>
+                            <div class="progress mt-3" style="width: 300px; margin: 0 auto;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+        fetch('/add_selected_offers', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(offerData)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selectedOffers })
         })
-        .then(response => response.json())
+        .then(res => res.json())
         .then(data => {
             if (data.success) {
-                btn.innerText = 'Added';
-                btn.classList.remove('btn-outline-success');
-                btn.classList.add('btn-success');
-                btn.disabled = true;
-            } else {
-                alert('❌ Failed to add: ' + (data.error || 'Unknown error'));
+    // Play success sound (similar to Google Pay)
+    const playSuccessSound = () => {
+        // Create audio context for success sound
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Success sound frequencies (pleasant chord)
+        const frequencies = [523, 659, 784]; // C5, E5, G5
+        
+        frequencies.forEach((freq, index) => {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.1);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
+            
+            oscillator.start(audioContext.currentTime + index * 0.1);
+            oscillator.stop(audioContext.currentTime + 0.8);
+        });
+    };
+
+    // Show Google Pay style success animation with drawing tick
+    adminTableResult.innerHTML = `
+        <div class="d-flex justify-content-center align-items-center" style="min-height: 300px;">
+            <div class="text-center">
+                <div class="success-animation mb-3" style="width: 5rem; height: 5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto; position: relative;">
+                    <div class="success-circle" style="
+                        width: 80px; 
+                        height: 80px; 
+                        border-radius: 50%; 
+                        background: linear-gradient(45deg, #34a853, #4caf50);
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center;
+                        box-shadow: 0 4px 20px rgba(52, 168, 83, 0.3);
+                        animation: successPulse 0.6s ease-out, successGlow 2s ease-in-out infinite 0.6s;
+                        position: relative;
+                        overflow: hidden;
+                    ">
+                        <!-- Animated Checkmark SVG -->
+                        <svg width="40" height="40" viewBox="0 0 24 24" style="position: absolute;">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" 
+                                  fill="white" 
+                                  stroke="white" 
+                                  stroke-width="2" 
+                                  stroke-linecap="round" 
+                                  stroke-linejoin="round"
+                                  style="
+                                    stroke-dasharray: 20;
+                                    stroke-dashoffset: 20;
+                                    animation: drawTick 1s ease-out 0.3s forwards;
+                                  "/>
+                        </svg>
+                    </div>
+                    
+                    <!-- Celebration particles -->
+                    <div class="particle" style="position: absolute; width: 4px; height: 4px; background: #4caf50; border-radius: 50%; animation: particle1 1.5s ease-out 0.8s;"></div>
+                    <div class="particle" style="position: absolute; width: 3px; height: 3px; background: #66bb6a; border-radius: 50%; animation: particle2 1.5s ease-out 0.9s;"></div>
+                    <div class="particle" style="position: absolute; width: 4px; height: 4px; background: #81c784; border-radius: 50%; animation: particle3 1.5s ease-out 1s;"></div>
+                    <div class="particle" style="position: absolute; width: 3px; height: 3px; background: #a5d6a7; border-radius: 50%; animation: particle4 1.5s ease-out 1.1s;"></div>
+                </div>
+                
+                <h5 class="text-success fw-bold" style="animation: fadeInUp 0.6s ease-out 1s both;">
+                    🎉 All Selected Offers Added Successfully!
+                </h5>
+                <p class="text-muted small" style="animation: fadeInUp 0.6s ease-out 1.2s both;">
+                    Your offers have been processed and are now active in the system.
+                </p>
+                <div class="success-badge mt-3" style="animation: fadeInUp 0.6s ease-out 1.4s both;">
+                    <span class="badge bg-success-subtle text-success border border-success px-3 py-2">
+                        <i class="fas fa-check-circle me-1"></i>
+                        Process completed successfully
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        <style>
+            @keyframes successPulse {
+                0% {
+                    transform: scale(0);
+                    opacity: 0;
+                }
+                50% {
+                    transform: scale(1.15);
+                }
+                100% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+            
+            @keyframes successGlow {
+                0%, 100% {
+                    box-shadow: 0 4px 20px rgba(52, 168, 83, 0.3);
+                }
+                50% {
+                    box-shadow: 0 8px 30px rgba(52, 168, 83, 0.6);
+                }
+            }
+            
+            @keyframes drawTick {
+                0% {
+                    stroke-dashoffset: 20;
+                    opacity: 0;
+                }
+                20% {
+                    opacity: 1;
+                }
+                100% {
+                    stroke-dashoffset: 0;
+                    opacity: 1;
+                }
+            }
+            
+            @keyframes fadeInUp {
+                0% {
+                    opacity: 0;
+                    transform: translateY(30px);
+                }
+                100% {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            
+            @keyframes particle1 {
+                0% { transform: translate(0, 0) scale(0); opacity: 1; }
+                100% { transform: translate(-30px, -30px) scale(1); opacity: 0; }
+            }
+            
+            @keyframes particle2 {
+                0% { transform: translate(0, 0) scale(0); opacity: 1; }
+                100% { transform: translate(35px, -25px) scale(1); opacity: 0; }
+            }
+            
+            @keyframes particle3 {
+                0% { transform: translate(0, 0) scale(0); opacity: 1; }
+                100% { transform: translate(-25px, 30px) scale(1); opacity: 0; }
+            }
+            
+            @keyframes particle4 {
+                0% { transform: translate(0, 0) scale(0); opacity: 1; }
+                100% { transform: translate(30px, 25px) scale(1); opacity: 0; }
+            }
+        </style>
+    `;
+    setTimeout(() => {
+    window.scrollBy({ top: 300, left: 0, behavior: 'smooth' });
+}, 200);  // delay allows DOM update before scroll
+    // Play success sound
+    try {
+        playSuccessSound();
+    } catch (error) {
+        console.log('Audio not supported');
+    }
+
+    // Wait for 4 seconds then show the results table
+    setTimeout(() => {
+        // Add fade out animation before showing results
+        adminTableResult.style.transition = 'opacity 0.4s ease-out';
+        adminTableResult.style.opacity = '0';
+        
+        setTimeout(() => {
+            adminTableResult.innerHTML = renderTable(window.latestApiData);
+            adminTableResult.style.opacity = '1';
+        }, 400);
+    }, 2500); // 4 seconds delay
+
+  
+} else {
+                alert('❌ Error: ' + (data.error || 'Unknown error'));
             }
         })
         .catch(err => {
             console.error(err);
-            alert('❌ Network error while adding offer.');
+            alert('❌ Network error while adding offers.');
         });
     }
+
+    // Handle select all
+    if (e.target && e.target.id === 'select-all-offers') {
+        const allCheckboxes = document.querySelectorAll('.offer-checkbox');
+        allCheckboxes.forEach(cb => cb.checked = e.target.checked);
+    }
 });
+
 </script>
 {% endblock %} 
-
