@@ -4924,15 +4924,15 @@ async def run_async_proxy_checks(url_country_pairs):
                 continue
 
             for country in countries:
-                proxy_cfg = PROXY_CONFIG['proxy_map'].get(country)
-                if not proxy_cfg:
-                    results.append({
-                        'url': url,
-                        'country': country,
-                        'status': f"❌ No proxy configured for '{country}'",
-                        'ip_country': "N/A"
-                    })
-                    continue
+                # proxy_cfg = PROXY_CONFIG['proxy_map'].get(country)
+                # if not proxy_cfg:
+                #     results.append({
+                #         'url': url,
+                #         'country': country,
+                #         'status': f"❌ No proxy configured for '{country}'",
+                #         'ip_country': "N/A"
+                #     })
+                #     continue
 
                 # proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{proxy_cfg['host']}:{proxy_cfg['port']}"
                 proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{country.lower()}.decodo.com:10000"
