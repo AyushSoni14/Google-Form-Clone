@@ -4937,7 +4937,6 @@ async def run_async_proxy_checks(url_country_pairs):
                 # proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{proxy_cfg['host']}:{proxy_cfg['port']}"
                 proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{country.lower()}.decodo.com:10000"
                 task = asyncio.create_task(
-                task = asyncio.create_task(
                     test_url_with_proxy_async(session, url, proxy_url)
                 )
                 tasks.append((task, url, country, offer_data))
