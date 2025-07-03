@@ -19,3 +19,4 @@ flask-cors
 APScheduler
 Flask-Mail
 aiohttp
+pytz
