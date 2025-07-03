@@ -200,7 +200,9 @@ def send_offer_cards_to_all_users():
                 "name": o.offer_name,
                 "description": o.offer_id,
                 "image": o.image_url,
-                "url": url_for('redirect_offer', offer_id=o.offer_id, _external=True)
+                # "url": url_for('redirect_offer', offer_id=o.offer_id, _external=True)
+                 "url": f"https://peppper.live{url_for('redirect_offer', offer_id=o.offer_id)}"
+
             }
             offers_data.append(masked_offer)
         print("offers_data=",offers_data)
