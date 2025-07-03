@@ -86,6 +86,61 @@ def post_forms_to_make_webhook():
         return False
 
 
+#this function is to send te data for offers we fetched from apis
+# def post_offers_to_make_webhook():
+#     webhook_url = "https://hook.us2.make.com/b1uzgg2pnl41mdy2od45ut239ahwcfht"
+#     offers = Offer.query.order_by(Offer.created_at.desc()).limit(20).all()
+#     offers_data = [{
+#         "name": o.name,
+#         "description": o.description,
+#         "payout": o.payout,
+#         "countries": o.countries,
+#         "image": o.image,
+#         "url": o.url
+#     } for o in offers]
+
+#     # You can send all offers as a list, or send one at a time in a loop
+#     payload = {"offers": offers_data}
+
+#     try:
+#         response = requests.post(webhook_url, json=payload)
+#         print(f"Webhook response: {response.status_code} - {response.text}")
+#         return response.status_code == 200
+#     except Exception as e:
+#         print(f"Failed to post to Make webhook: {e}")
+#         return False
+
+def post_forms_to_make_webhook():
+    webhook_url = "https://hook.us2.make.com/b1uzgg2pnl41mdy2od45ut239ahwcfht"
+    forms = Form.query.order_by(Form.created_at.desc()).limit(20).all()
+    forms_data = []
+    for f in forms:
+        form_dict = {
+            "id": f.id,
+            "title": f.title,
+            "description": f.description,
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+            "is_external": f.is_external,
+            "author_email": f.author.email if hasattr(f, 'author') and f.author else None,
+            "questions": [
+                {
+                    "id": q.id,
+                    "question_text": q.question_text,
+                    "question_type": q.question_type,
+                    "required": q.required
+                } for q in f.questions
+            ]
+        }
+        forms_data.append(form_dict)
+    payload = {"forms": forms_data}
+    try:
+        response = requests.post(webhook_url, json=payload)
+        print(f"Webhook response: {response.status_code} - {response.text}")
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Failed to post to Make webhook: {e}")
+        return False
+
 # Decorator for admin access
 def admin_required(f):
     @wraps(f)
@@ -132,36 +187,73 @@ mail = Mail(app)
 # Daily report email task
 from flask import render_template
 
-def send_daily_form_reports():
+
+def send_offer_cards_to_all_users():
     with app.app_context():
+        offers = OffersFromUrlTester.query.all()# or whatever logic you want
+        offers_data = []
+        for o in offers:
+            if not o.offer_id:
+                print("Offer with missing offer_id:", o)
+                continue  # skip this offer
+            masked_offer = {
+                "name": o.offer_name,
+                "description": o.offer_id,
+                "image": o.image_url,
+                "url": url_for('redirect_offer', offer_id=o.offer_id, _external=True)
+            }
+            offers_data.append(masked_offer)
+        print("offers_data=",offers_data)
+
         users = User.query.all()
         for user in users:
-            forms = Form.query.filter_by(user_id=user.id).all()
-            form_stats = []
-            for form in forms:
-                response_count = Response.query.filter_by(form_id=form.id).count()
-                form_stats.append({
-                    'title': form.title,
-                    'created_at': form.created_at,
-                    'response_count': response_count
-                })
-            if not forms:
-                continue  # Skip users with no forms
-            html = render_template('email/daily_report.html', user=user, form_stats=form_stats)
+            html = render_template('email/offer_digest.html', user=user, offers=offers_data)
             msg = Message(
-                subject="Your Daily Form Report",
+                subject="Today's Offers Digest",
                 recipients=[user.email],
                 html=html,
                 sender=app.config['MAIL_USERNAME']
             )
             try:
                 mail.send(msg)
+                print(f"Sent offers to {user.email}")
             except Exception as e:
-                print(f"Failed to send report to {user.email}: {e}")
+                print(f"Failed to send offers to {user.email}: {e}")
+
+
+# def send_daily_form_reports():
+#     with app.app_context():
+#         users = User.query.all()
+#         for user in users:
+#             forms = Form.query.filter_by(user_id=user.id).all()
+#             form_stats = []
+#             for form in forms:
+#                 response_count = Response.query.filter_by(form_id=form.id).count()
+#                 form_stats.append({
+#                     'title': form.title,
+#                     'created_at': form.created_at,
+#                     'response_count': response_count
+#                 })
+#             if not forms:
+#                 continue  # Skip users with no forms
+#             html = render_template('email/offer_digest.html', user=user, form_stats=form_stats)
+#             msg = Message(
+#                 subject="Your Daily Form Report",
+#                 recipients=[user.email],
+#                 html=html,
+#                 sender=app.config['MAIL_USERNAME']
+#             )
+#             try:
+#                 mail.send(msg)
+#             except Exception as e:
+#                 print(f"Failed to send report to {user.email}: {e}")
+
+
 
 # Start the scheduler
+print("Scheduler started")
 scheduler = BackgroundScheduler()
-scheduler.add_job(send_daily_form_reports, 'cron', hour=13, minute=50)
+scheduler.add_job(send_offer_cards_to_all_users, 'cron', hour=16, minute=00)
 scheduler.start()
 
 # Configure Google Generative AI with HTTP transport
@@ -212,14 +304,25 @@ def datetime_filter(date):
 app.jinja_env.filters['datetime'] = datetime_filter
 
 # Models
+
+class Offer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text)
+    payout = db.Column(db.String(50))
+    countries = db.Column(db.String(255))
+    image = db.Column(db.String(500))
+    url = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 class OffersFromUrlTester(db.Model):
     __tablename__ = 'offers_from_url_tester'
-
     my_row_id = db.Column(db.BigInteger, primary_key=True)
     offer_name = db.Column(db.String(255))
     offer_id = db.Column(db.String(100))
     image_url = db.Column(db.Text)
     target_url = db.Column(db.Text)
+
 class PostbackTesterJob(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -950,6 +1053,10 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 
+@app.route('/send_forms_to_make')
+def send_forms_to_make():
+    success = post_forms_to_make_webhook()
+    return "Sent!" if success else "Failed!"
 # Helper function to export responses as JSON
 def export_response_to_json(response, form):
     """
@@ -4815,18 +4922,17 @@ async def run_async_proxy_checks(url_country_pairs):
                 continue
 
             for country in countries:
-                # proxy_cfg = PROXY_CONFIG['proxy_map'].get(country)
-                # if not proxy_cfg:
-                #     results.append({
-                #         'url': url,
-                #         'country': country,
-                #         'status': f"❌ No proxy configured for '{country}'",
-                #         'ip_country': "N/A"
-                #     })
-                #     continue
+                proxy_cfg = PROXY_CONFIG['proxy_map'].get(country)
+                if not proxy_cfg:
+                    results.append({
+                        'url': url,
+                        'country': country,
+                        'status': f"❌ No proxy configured for '{country}'",
+                        'ip_country': "N/A"
+                    })
+                    continue
 
-                # proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{proxy_cfg['host']}:{proxy_cfg['port']}"
-                proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{country.lower()}.decodo.com:10000"
+                proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{proxy_cfg['host']}:{proxy_cfg['port']}"
                 task = asyncio.create_task(
                     test_url_with_proxy_async(session, url, proxy_url)
                 )
@@ -4859,7 +4965,35 @@ async def run_async_proxy_checks(url_country_pairs):
                 })
 
     return results
+@app.route('/add_selected_offers', methods=['POST'])
+@login_required
+@admin_required
+def add_selected_offers():
+    data = request.get_json()
+    selected_offers = data.get('selectedOffers', [])
+    if not selected_offers:
+        return jsonify({'success': False, 'error': 'No offers provided.'}), 400
 
+    added = 0
+    for offer in selected_offers:
+        try:
+            offer_id = offer.get('id')
+            existing = OffersFromUrlTester.query.filter_by(offer_id=offer_id).first()
+            if existing:
+                continue
+            new_offer = OffersFromUrlTester(
+                offer_id=offer.get('id'),
+                offer_name=offer.get('name'),
+                image_url=offer.get('image'),
+                target_url=offer.get('url')
+            )
+            db.session.add(new_offer)
+            added += 1
+        except Exception as e:
+            print(f"Error adding offer: {e}")
+    db.session.commit()
+
+    return jsonify({'success': True, 'added': added})
 @app.route('/add_offer_to_table', methods=['POST'])
 def add_offer_to_table():
     data = request.get_json()
@@ -4888,11 +5022,23 @@ def add_offer_to_table():
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/send_forms_to_make')
-def send_forms_to_make():
-    success = post_forms_to_make_webhook()
-    return "Sent!" if success else "Failed!"
 
+# @app.route('/send_forms_to_make')
+# def send_forms_to_make():
+#     success = post_forms_to_make_webhook()
+#     return "Sent!" if success else "Failed!"
+
+#manual testing of gmail
+@app.route('/test_send_offers')
+def test_send_offers():
+    send_offer_cards_to_all_users()
+    return "Triggered!"
+
+@app.route('/go/<offer_id>')
+def redirect_offer(offer_id):
+    offer = OffersFromUrlTester.query.filter_by(offer_id=offer_id).first_or_404()
+    # Optionally log the click here for tracking
+    return redirect(offer.target_url)
 
 if __name__ == '__main__':
     with app.app_context():
@@ -4924,3 +5070,10 @@ if __name__ == '__main__':
 
     # app.run(debug=True)
     app.run(host='0.0.0.0', port=5000)
+
+
+
+
+
+
+
