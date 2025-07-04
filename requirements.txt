@@ -20,3 +20,4 @@ APScheduler
 Flask-Mail
 aiohttp
 pytz
+cloudinary

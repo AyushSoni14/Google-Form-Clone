@@ -38,6 +38,40 @@ import threading
 from flask import abort
 from flask_mail import Mail, Message
 from apscheduler.schedulers.background import BackgroundScheduler
+import cloudinary
+import cloudinary.uploader
+from cloudinary.utils import cloudinary_url
+
+# Cloudinary configuration
+cloudinary.config(
+    cloud_name = "dovg8wrd0",
+    api_key = "865849191388873",
+    api_secret = "ET2fdg_PwXLjsEqvJEjw9LBdsNQ",  # Replace with your actual secret
+    secure=True
+)
+
+def upload_offer_images_to_cloudinary():
+    offers = OffersFromUrlTester.query.all()
+    for offer in offers:
+        if not offer.image_url or not offer.offer_id:
+            continue
+        # Use offer_id as the public_id in Cloudinary
+        public_id = f"offers/{offer.offer_id}"
+        try:
+            # Check if already uploaded (optional: you can skip this for idempotency)
+            # Try to fetch the image URL from Cloudinary
+            url, _ = cloudinary_url(public_id, fetch_format="auto", quality="auto")
+            # If you want to check if it exists, you can use the Admin API (not shown here)
+            # For simplicity, always upload (Cloudinary will overwrite if exists)
+            upload_result = cloudinary.uploader.upload(
+                offer.image_url,
+                public_id=public_id,
+                overwrite=True,
+                resource_type="image"
+            )
+            print(f"Uploaded {offer.image_url} as {public_id}: {upload_result['secure_url']}")
+        except Exception as e:
+            print(f"Error uploading {offer.image_url} to Cloudinary: {e}")
 
 #this function is to send te data for offers we fetched from apis
 def post_forms_to_make_webhook():
@@ -190,22 +224,26 @@ from flask import render_template
 
 def send_offer_cards_to_all_users():
     with app.app_context():
-        offers = OffersFromUrlTester.query.all()# or whatever logic you want
+        offers = OffersFromUrlTester.query.all()  # or whatever logic you want
         offers_data = []
+        counter = 1
         for o in offers:
             if not o.offer_id:
                 print("Offer with missing offer_id:", o)
                 continue  # skip this offer
+            # Use Cloudinary URL for the image
+            public_id = f"offers/{o.offer_id}"
+            image_url, _ = cloudinary_url(public_id, fetch_format="auto", quality="auto")
             masked_offer = {
                 "name": o.offer_name,
-                "description": o.offer_id,
-                "image": o.image_url,
+                "description": counter,
+                "image": image_url,
                 # "url": url_for('redirect_offer', offer_id=o.offer_id, _external=True)
-                 "url": f"https://peppper.live{url_for('redirect_offer', offer_id=o.offer_id)}"
-
+                "url": f"https://peppper.live{url_for('redirect_offer', offer_id=o.offer_id)}"
             }
+            counter += 1
             offers_data.append(masked_offer)
-        print("offers_data=",offers_data)
+        print("offers_data=", offers_data)
 
         users = User.query.all()
         for user in users:
@@ -324,6 +362,7 @@ class OffersFromUrlTester(db.Model):
     offer_id = db.Column(db.String(100))
     image_url = db.Column(db.Text)
     target_url = db.Column(db.Text)
+    
 
 class PostbackTesterJob(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -5033,15 +5072,60 @@ def add_offer_to_table():
 
 #manual testing of gmail
 @app.route('/test_send_offers')
+
 def test_send_offers():
+    #download_offer_images()
+    upload_offer_images_to_cloudinary()
     send_offer_cards_to_all_users()
     return "Triggered!"
 
 @app.route('/go/<offer_id>')
+@login_required
 def redirect_offer(offer_id):
     offer = OffersFromUrlTester.query.filter_by(offer_id=offer_id).first_or_404()
     # Optionally log the click here for tracking
     return redirect(offer.target_url)
+
+@app.route('/offer_image/<offer_id>')
+def offer_image(offer_id):
+    offer = OffersFromUrlTester.query.filter_by(offer_id=offer_id).first_or_404()
+    # Try common image extensions
+    image_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'offer_images')
+    for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
+        filename = f"{offer_id}{ext}"
+        filepath = os.path.join(image_dir, filename)
+        if os.path.exists(filepath):
+            return send_from_directory(image_dir, filename)
+    # If not found, return placeholder
+    return send_from_directory('static', 'placeholder.png')
+
+import requests
+import os
+
+def download_offer_images():
+    offers = OffersFromUrlTester.query.all()
+    image_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'offer_images')
+    os.makedirs(image_dir, exist_ok=True)
+
+    for offer in offers:
+        if not offer.image_url or not offer.offer_id:
+            continue
+        ext = os.path.splitext(offer.image_url)[-1]
+        if not ext or len(ext) > 5:
+            ext = '.jpg'
+        filename = f"{offer.offer_id}{ext}"
+        filepath = os.path.join(image_dir, filename)
+        if not os.path.exists(filepath):
+            try:
+                resp = requests.get(offer.image_url, timeout=10)
+                if resp.status_code == 200:
+                    with open(filepath, 'wb') as f:
+                        f.write(resp.content)
+                    print(f"Downloaded {filename}")
+                else:
+                    print(f"Failed to download {offer.image_url}")
+            except Exception as e:
+                print(f"Error downloading {offer.image_url}: {e}")
 
 if __name__ == '__main__':
     with app.app_context():
