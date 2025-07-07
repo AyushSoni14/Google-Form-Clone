@@ -232,6 +232,10 @@
                             <input type="text" class="form-control" id="apiUrl" placeholder="e.g., {{ request.url_root }}api/stats">
                         </div>
                         <div class="mb-3">
+                            <label for="traking_url" class="form-label">Traking URL</label>
+                            <input type="text" class="form-control" id="traking_url" placeholder="e.g., {{ request.url_root }}api/stats">
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">Query Parameters</label>
                             <div id="paramsList"></div>
                             <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addParamRow()">+ Add Parameter</button>
@@ -866,10 +870,14 @@ const headerHtml = `
     
     return headerHtml + `<div class="row">${cardsHtml}</div>`;
 }
-
+// let trackingUrlInput=document.getElementById('traking_url').value.trim();
 function renderTable(data) {
     // Deep search function to find all offer-related data
     // Add this line after the existing variable declarations
+    let trackingUrlInput = document.getElementById('traking_url')?.value.trim() || "";
+   // const url=updateOfferId(trackingUrlInput,id);
+    // Now use trackingUrlInput safely inside your logic
+    console.log("Tracking URL input:", trackingUrlInput); 
     let selectedOfferIndices = new Set();
     function deepSearchOffers(obj, path = '', visited = new Set()) {
         if (!obj || typeof obj !== 'object' || visited.has(obj)) {
@@ -1185,9 +1193,22 @@ function extractCountriesFromName(name) {
         if (!url || url === 'N/A') {
             url = extractValueDeep(completeData, ['url', 'preview_url', 'link', 'offer_url', 'tracking_url', 'landing_url', 'click_url', 'demo_url', 'website']);
         }
+    
         return url && url !== 'N/A' ? url : '';
     }
+    function updateOfferId(url, newId) {
+    // Match common variations of offer ID keys
+      const regex = /(offer[_-]?id|id|offerId)=\d+/i;
 
+      if (regex.test(url)) {
+        // Replace the matched parameter with the new ID
+        return url.replace(regex, `$1=${newId}`);
+      } else {
+        // If no ID parameter is found, append it to the URL
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}offer_id=${newId}`;
+      }
+    }
     // Helper to extract name
     function getName(offerData, completeData) {
         let name = extractValueDeep(offerData, ['name', 'title', 'offer_name', 'campaign_name', 'display_name', 'label']);
@@ -1297,7 +1318,9 @@ function extractCountriesFromName(name) {
             const name = getName(offerData, completeData);
             const image = getImage(offerData, completeData);
             const countries = getCountries(completeData);
-            const url = getUrl(offerData, completeData);
+            // const url = getUrl(offerData, completeData);
+            // const trackingUrl = document.getElementById('traking_url').value.trim();
+            const url=updateOfferId(trackingUrlInput,id);
             const payout = getPayout(completeData);
             
             // Countries as badges, handle empty
@@ -1721,7 +1744,10 @@ if (selectAll) {
     const offer = filteredOffers[idx]; // Use allOffers instead of filteredOffers
     if (!offer) return;
     
-    const url = getUrl(offer.offerData, offer.completeData);
+    //   const url = getUrl(offer.offerData, offer.completeData);
+    const id=getId(offer.offerData, offer.completeData);
+    let trackingUrlInput = document.getElementById('traking_url')?.value.trim() || "";
+    const url = updateOfferId(trackingUrlInput,id);
     const countries = getCountries(offer.completeData);
     
     if (url && countries && countries.length > 0) {
@@ -1729,7 +1755,7 @@ if (selectAll) {
             url: url,
             countries: countries,
             offer_data: {
-                id: getId(offer.offerData, offer.completeData),
+                id: id,
                 name: getName(offer.offerData, offer.completeData),
                 image: getImage(offer.offerData, offer.completeData),
                 countries: countries,
@@ -1902,6 +1928,7 @@ document.getElementById('adminApiTestForm').addEventListener('submit', function(
         if (window.hljs) hljs.highlightAll();
         adminApiResult.textContent = `Status: ${result.status} ${result.statusText}\n\n`;
         adminApiResult.textContent += typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
+        // trackingUrlInput = document.getElementById('traking_url');
         adminTableResult.innerHTML = renderTable(result.data);
     })
     .catch(error => {
