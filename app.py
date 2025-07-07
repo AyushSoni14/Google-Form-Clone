@@ -41,6 +41,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import cloudinary
 import cloudinary.uploader
 from cloudinary.utils import cloudinary_url
+from utils.time_features import is_active_between_hours, is_active_on_days, is_campaign_active
+from pytz import timezone as pytz_timezone, all_timezones
+from random import choice
 
 # Cloudinary configuration
 cloudinary.config(
@@ -208,7 +211,7 @@ app.config['GOOGLE_API_KEY'] = os.getenv('GOOGLE_API_KEY')  # Get API key from e
 app.config['RECAPTCHA_SITE_KEY'] = os.getenv('RECAPTCHA_SITE_KEY')
 app.config['RECAPTCHA_SECRET_KEY'] = os.getenv('RECAPTCHA_SECRET_KEY')
 app.config['RECAPTCHA_VERIFY_URL'] = 'https://www.google.com/recaptcha/api/siteverify'
-app.jinja_env.filters['fromjson'] = json.loads
+# app.jinja_env.filters['fromjson'] = json.loads
 
 # Flask-Mail configuration
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'  # <-- Replace with your SMTP server
@@ -436,6 +439,10 @@ class Form(db.Model):
     offer_preview_url = db.Column(db.String(500), nullable=True)
     offer_country = db.Column(db.String(255), nullable=True)
     offer_date = db.Column(db.Date, nullable=True)
+    active_from = db.Column(db.DateTime, nullable=True)
+    active_to = db.Column(db.DateTime, nullable=True)
+    timezone = db.Column(db.String(64), nullable=True)
+    redirect_links = db.Column(db.Text, nullable=True)  # Store as JSON string
 
 class SubQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -896,29 +903,46 @@ def create_form():
     if request.method == 'POST':
         title = request.form.get('title')
         description = request.form.get('description')
-        requires_consent = 'requires_consent' in request.form
         score = request.form.get('score', 100)
+        user_id = current_user.id
+        company_id = session.get('referral_company_id')
+        requires_consent = 'requires_consent' in request.form
         is_external = 'is_external' in request.form
         external_url = request.form.get('external_url')
 
-        # If it's an external form, some fields might not be directly applicable
-        if is_external:
-            # For external forms, score and requires_consent might not be explicitly set
-            # Set them to default values or handle as needed.
-            # For now, we'll keep what's submitted or their default model values.
-            pass
+        # Parse time fields BEFORE using them
+        active_from_str = request.form.get('active_from')
+        active_to_str = request.form.get('active_to')
+        tz_name = request.form.get('timezone')
 
-        print("score=",score)
-        # Create a new form
+        active_from = None
+        active_to = None
+        if active_from_str:
+            active_from = datetime.strptime(active_from_str, '%Y-%m-%dT%H:%M')
+            if tz_name:
+                import pytz
+                tz = pytz.timezone(tz_name)
+                active_from = tz.localize(active_from)
+        if active_to_str:
+            active_to = datetime.strptime(active_to_str, '%Y-%m-%dT%H:%M')
+            if tz_name:
+                import pytz
+                tz = pytz.timezone(tz_name)
+                active_to = tz.localize(active_to)
+
+        # Now create the Form object
         form = Form(
             title=title,
             description=description,
-            user_id=current_user.id,
-            company_id=session.get('referral_company_id'),
-            requires_consent=requires_consent,
             score=score,
+            user_id=user_id,
+            company_id=company_id,
+            requires_consent=requires_consent,
             is_external=is_external,
-            external_url=external_url
+            external_url=external_url,
+            active_from=active_from,
+            active_to=active_to,
+            timezone=tz_name
         )
 
         # Process country restrictions
@@ -934,7 +958,14 @@ def create_form():
         else:
             form.blocked_countries = None # Or an empty JSON array if you prefer
         
-        # Add form to database
+        redirect_links_input = request.form.get('redirect_links', '').strip()
+        if redirect_links_input:
+            # Split by lines, remove empty lines, and store as JSON
+            redirect_links = [line.strip() for line in redirect_links_input.splitlines() if line.strip()]
+            form.redirect_links = json.dumps(redirect_links)
+        else:
+            form.redirect_links = None
+        
         db.session.add(form)
         db.session.commit()
         
@@ -956,9 +987,53 @@ def create_form():
                 except Exception:
                     form.offer_date = None
         
-        return redirect(url_for('edit_form', form_id=form.id))
+        # Add questions to form
+        # for i, q in enumerate(questions):
+        #     question = Question(
+        #         form_id=form.id,
+        #         question_text=q['text'],
+        #         question_type=q['type'],
+        #         required=q['required'],
+        #         order=i
+        #     )
+        #     if 'options' in q:
+        #         question.set_options(q['options'])
+        #     db.session.add(question)
         
-    return render_template('create_form.html')
+        # db.session.commit()
+        
+        # # Clear referral from session after form creation
+        # session.pop('referral_company_id', None)
+        
+        flash('Form generated successfully!')
+        return redirect(url_for('edit_form', form_id=form.id))
+    
+    return render_template('create_form.html', all_timezones=all_timezones)
+
+
+
+
+
+
+   
+
+    # ... (rest of your view_form logic) ...
+
+
+
+
+
+
+from random import choice
+import json
+import pytz
+
+def ensure_aware(dt, tz):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return tz.localize(dt)
+    return dt
 
 @app.route('/form/<int:form_id>')
 def view_form(form_id):
@@ -972,6 +1047,36 @@ def view_form(form_id):
     user_country = get_user_country_from_ip(request.remote_addr)
     is_blocked = False
     block_reason = ""
+
+# Default to UTC if no timezone is set
+    if form.timezone:
+        tz = pytz.timezone(form.timezone)
+    else:
+        tz = pytz.UTC
+
+    now = datetime.now(tz)
+
+    active_from = ensure_aware(form.active_from, tz)
+    active_to = ensure_aware(form.active_to, tz)
+
+    # Load redirect links
+    redirect_links = []
+    if form.redirect_links:
+        try:
+            redirect_links = json.loads(form.redirect_links)
+        except Exception:
+            redirect_links = []
+
+    def get_redirect_link():
+        if redirect_links:
+            return choice(redirect_links)
+        else:
+            return "https://www.google.com"  # fallback
+
+    # If before active_from or after active_to, redirect
+    if (active_from and now < active_from) or (active_to and now > active_to):
+        return redirect(get_redirect_link())
+
 
     # Parse allowed and blocked countries
     allowed_countries = []
@@ -1278,6 +1383,9 @@ def submit_form(form_id):
             'message': 'This form is closed and no longer accepting responses.'
         }), 403
     
+    
+
+
     # Get user_id and company_name from query parameters
     user_id = request.args.getlist('q')[0]  # First 'q' param = userId
     company_name = request.args.getlist('q')[1]  # Second 'q' param = companyName
@@ -1754,7 +1862,7 @@ def update_form(form_id):
                 if not isinstance(options_data, list):
                     print(f"Warning: Expected options to be a list, got {type(options_data)}. Converting to empty list.")
                     options_data = []
-                
+
                 # Save options as JSON - this stores all the option data including media properties
                 question.options = json.dumps(options_data)
                 print(f"Saving options for question {idx+1}: {question.options}")
@@ -2837,7 +2945,7 @@ def upload_media():
     description = request.form.get('description', '')
     
     # Check if file is an image or GIF
-    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+    allowed_extensions = {'png', 'jpg', '.jpeg', 'gif'}
     if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
         return jsonify({'error': 'Invalid file type. Only images and GIFs are allowed.'}), 400
     
@@ -3977,7 +4085,7 @@ def create_form_from_ai():
             score=int(score) 
         )
         db.session.add(form)
-        db.session.flush()  # Get the form ID
+        db.session.commit()
 
         # Add questions from each section
         order = 1
@@ -4369,7 +4477,6 @@ def end_impersonation():
         flash('Original admin user not found. Please log in again.', 'danger')
         return redirect(url_for('login'))
 
-
 @app.route('/proxy_postback', methods=['POST'])
 def proxy_postback():
     data = request.get_json()
@@ -4604,6 +4711,7 @@ def admin_proxy_api():
         return resp.text, resp.status_code, {'Content-Type': resp.headers.get('Content-Type', 'text/plain')}
     except Exception as e:
         return str(e), 500, {'Content-Type': 'text/plain'}
+
 @app.route('/postbacks/delete/<int:postback_id>', methods=['POST'])
 @login_required
 def delete_postback(postback_id):
@@ -5127,6 +5235,17 @@ def download_offer_images():
                     print(f"Failed to download {offer.image_url}")
             except Exception as e:
                 print(f"Error downloading {offer.image_url}: {e}")
+
+@app.route('/some-feature')
+def some_feature():
+    feature_active = is_active_between_hours(15, 18)  # 3 PM to 6 PM
+    return render_template('some_template.html', feature_active=feature_active)
+
+def get_daily_offer(offers):
+    # offers: list of offer dicts or links
+    today = datetime.now().date()
+    idx = today.toordinal() % len(offers)
+    return offers[idx]
 
 if __name__ == '__main__':
     with app.app_context():

@@ -371,6 +371,12 @@
                     <option value="{{ tz }}">{{ tz }}</option>
                   {% endfor %}
                 </select> -->
+
+                <div class="mb-3">
+                    <label for="redirect_links" class="form-label">External Redirect Links (one per line)</label>
+                    <textarea class="form-control" id="redirect_links" name="redirect_links" rows="3">{% if form.redirect_links %}{{ form.redirect_links | fromjson | join('\n') }}{% endif %}</textarea>
+                    <small class="form-text text-muted">These links will be used for redirection if the form is not active. One link per line.</small>
+                </div>
             </div>
         </div>
     </div>

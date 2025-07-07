@@ -99,6 +99,12 @@
                         </select>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="redirect_links" class="form-label">External Redirect Links (one per line)</label>
+                        <textarea class="form-control" id="redirect_links" name="redirect_links" rows="3" placeholder="https://example1.com&#10;https://example2.com"></textarea>
+                        <small class="form-text text-muted">These links will be used for redirection if the form is not active. One link per line.</small>
+                    </div>
+
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
                         <button type="submit" id="submitButton" class="btn btn-primary">Create Form</button>
