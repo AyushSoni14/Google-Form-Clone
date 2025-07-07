@@ -273,6 +273,68 @@
                 </div>
             </div>
         </div>
+    <div class="tab-pane fade" id="domain-cheker" role="tabpanel" aria-labelledby="domain-cheker-tab">
+        <h2>Domain Checker</h2>
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">User Domain Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Website</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                            <tr>
+                                <td>{{ user.id }}</td>
+                                <td>{{ user.email.split('@')[0] if user.email else 'N/A' }}</td>
+                                <td>{{ user.email }}</td>
+                                <td>
+                                    {% if user.website %}
+                                        <a href="{{ user.website }}" target="_blank" class="text-decoration-none">
+                                            {{ user.website }}
+                                            <i class="fas fa-external-link-alt ms-1"></i>
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">No website</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if user.website %}
+                                        <button class="btn btn-sm btn-outline-primary" onclick="checkDomain('{{ user.website }}')">
+                                            <i class="fas fa-search"></i> Check Domain
+                                        </button>
+                                    {% else %}
+                                        <button class="btn btn-sm btn-outline-secondary" disabled>
+                                            <i class="fas fa-search"></i> No Domain
+                                        </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer">
+                <h5 class="card-title">Domain Check Results</h5>
+                <div id="domainCheckResults" class="mt-3">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Click "Check Domain" on any user row to see domain information.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     </div>
 </div>
 {% endblock %}
@@ -354,6 +416,191 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// Domain checker function
+function checkDomain(domain) {
+    // Show loading state
+    const resultsDiv = document.getElementById('domainCheckResults');
+    resultsDiv.innerHTML = `
+        <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+            <div class="text-center">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h6 class="text-muted">Checking domain: ${domain}</h6>
+                <p class="text-muted small">Fetching domain information from Seranking API...</p>
+            </div>
+        </div>
+    `;
+
+    // Make API call to backend
+    fetch('/admin/check-domain', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            domain: domain
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Display the results in a nice format
+            resultsDiv.innerHTML = renderDomainResults(data.data, domain);
+        } else {
+            resultsDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Error:</strong> ${data.error || 'Failed to check domain'}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        resultsDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Network Error:</strong> Failed to connect to the server
+            </div>
+        `;
+    });
+}
+
+// Function to render domain check results
+function renderDomainResults(data, domain) {
+    let html = `
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-check-circle me-2"></i>
+                    Domain Analysis Results for: <strong>${domain}</strong>
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+    `;
+
+    // Add key metrics
+    if (data.domain) {
+        html += `
+            <div class="col-md-6 mb-3">
+                <div class="card h-100 border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0"><i class="fas fa-globe me-2"></i>Domain Information</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Domain:</span>
+                                <strong>${data.domain || 'N/A'}</strong>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Status:</span>
+                                <span class="badge bg-success">Active</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Add SEO metrics if available
+    if (data.seo) {
+        html += `
+            <div class="col-md-6 mb-3">
+                <div class="card h-100 border-info">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>SEO Metrics</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Organic Keywords:</span>
+                                <strong>${data.seo.organic_keywords || 'N/A'}</strong>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Organic Traffic:</span>
+                                <strong>${data.seo.organic_traffic || 'N/A'}</strong>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Domain Authority:</span>
+                                <strong>${data.seo.domain_authority || 'N/A'}</strong>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Add ranking data if available
+    if (data.ranking && data.ranking.length > 0) {
+        html += `
+            <div class="col-12 mb-3">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <h6 class="mb-0"><i class="fas fa-trophy me-2"></i>Top Rankings</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Position</th>
+                                        <th>Keyword</th>
+                                        <th>Search Volume</th>
+                                        <th>URL</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+        `;
+        
+        data.ranking.slice(0, 10).forEach(rank => {
+            html += `
+                <tr>
+                    <td><span class="badge bg-primary">${rank.position || 'N/A'}</span></td>
+                    <td>${rank.keyword || 'N/A'}</td>
+                    <td>${rank.search_volume || 'N/A'}</td>
+                    <td><a href="${rank.url || '#'}" target="_blank" class="text-truncate d-inline-block" style="max-width: 200px;">${rank.url || 'N/A'}</a></td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Add raw data section
+    html += `
+        <div class="col-12">
+            <div class="card border-secondary">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0"><i class="fas fa-code me-2"></i>Raw API Response</h6>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto; font-size: 0.8rem;">${JSON.stringify(data, null, 2)}</pre>
+                </div>
+            </div>
+        </div>
+    `;
+
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+
+    return html;
+}
 
 function renderPretty(data) {
     

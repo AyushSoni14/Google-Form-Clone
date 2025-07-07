@@ -44,7 +44,7 @@ from cloudinary.utils import cloudinary_url
 from utils.time_features import is_active_between_hours, is_active_on_days, is_campaign_active
 from pytz import timezone as pytz_timezone, all_timezones
 from random import choice
-
+from urllib.parse import urlparse
 # Cloudinary configuration
 cloudinary.config(
     cloud_name = "dovg8wrd0",
@@ -402,6 +402,7 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+    website = db.Column(db.String(500), nullable=True)
 
 class Company(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -854,13 +855,14 @@ def signup():
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
-        
+        website = request.form.get('website')
         if User.query.filter_by(email=email).first():
             flash('Email already registered')
             return redirect(url_for('signup'))
             
         user = User(email=email)
         user.set_password(password)
+        user.website = website
         db.session.add(user)
         db.session.commit()
         
@@ -4711,6 +4713,51 @@ def admin_proxy_api():
         return resp.text, resp.status_code, {'Content-Type': resp.headers.get('Content-Type', 'text/plain')}
     except Exception as e:
         return str(e), 500, {'Content-Type': 'text/plain'}
+
+@app.route('/admin/check-domain', methods=['POST'])
+@login_required
+@admin_required
+def check_domain():
+    try:
+        data = request.get_json()
+        domain = data.get('domain')
+
+        if not domain:
+            return jsonify({'success': False, 'error': 'Domain is required'}), 400
+
+        # Clean and parse domain
+        parsed_url = urlparse(domain)
+        domain = parsed_url.netloc if parsed_url.netloc else parsed_url.path
+        domain = domain.replace('www.', '').strip('/')
+        print(f"Checking domain: {domain}")
+
+        api_key = "7fba7891-dd6e-65c2-1272-a50d70d0f3b7"
+        if not api_key:
+            return jsonify({'success': False, 'error': 'Seranking API key not configured'}), 500
+
+        url = 'https://api.seranking.com/v1/domain/overview/worldwide'
+        headers = {
+            'Authorization': f'Token {api_key}'
+        }
+       
+        params = {
+            'domain': domain,
+            'currency': 'USD',
+            'fields': 'price,traffic,keywords,positions_diff,positions_tops',
+            'show_zones_list': '0'
+        }
+
+        response = requests.get(url, headers=headers, params=params)
+
+        if response.status_code == 200:
+            return jsonify({'success': True, 'data': response.json()})
+        else:
+            return jsonify({'success': False, 'error': f'API request failed with status {response.status_code}: {response.text}'}), response.status_code
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({'success': False, 'error': f'Network error: {str(e)}'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Unexpected error: {str(e)}'}), 500
 
 @app.route('/postbacks/delete/<int:postback_id>', methods=['POST'])
 @login_required
