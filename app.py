@@ -446,7 +446,6 @@ class Form(db.Model):
     active_end_time = db.Column(db.Time, nullable=True)
     timezone = db.Column(db.String(64), nullable=True)
     redirect_links = db.Column(db.Text, nullable=True)  # Store as JSON string
-
 class SubQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
