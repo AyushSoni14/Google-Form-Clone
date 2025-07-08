@@ -237,12 +237,12 @@ def send_offer_cards_to_all_users():
                 print("Offer with missing offer_id:", o)
                 continue  # skip this offer
             # Use Cloudinary URL for the image
-            public_id = f"offers/{o.offer_id}"
-            image_url, _ = cloudinary_url(public_id, fetch_format="auto", quality="auto")
+            # public_id = f"offers/{o.offer_id}"
+            # image_url, _ = cloudinary_url(public_id, fetch_format="auto", quality="auto")
             masked_offer = {
                 "name": o.offer_name,
-                "description": counter,
-                "image": image_url,
+                "description": o.my_row_id,
+                "image": o.masked_image_url,
                 # "url": url_for('redirect_offer', offer_id=o.offer_id, _external=True)
                 "url": o.masked_target_url
             }
@@ -5233,13 +5233,13 @@ def add_offer_to_table():
         db.session.commit()
         offer.masked_target_url = f"https://peppper.live{url_for('redirect_offer', offer_id=offer.my_row_id)}"
         public_id = f"offers/{offer.my_row_id}"
-        # if is_image_url(offer.image_url):  # <-- Optional validation
-        #    upload_result = cloudinary.uploader.upload(
-        #       offer.image_url,
-        #       public_id=public_id,
-        #       overwrite=True,
-        #       resource_type="image"
-        #    )
+        image_url_to_upload = offer.image_url if offer.image_url and is_image_url(offer.image_url) else "https://upload.wikimedia.org/wikipedia/commons/6/65/No-Image-Placeholder.svg"
+        upload_result = cloudinary.uploader.upload(
+              image_url_to_upload,
+              public_id=public_id,
+              overwrite=True,
+              resource_type="image"
+           )
         masked_image_url, _ = cloudinary_url(public_id, fetch_format="auto", quality="auto")
         offer.masked_image_url=masked_image_url
         
@@ -5260,7 +5260,7 @@ def add_offer_to_table():
 
 def test_send_offers():
     #download_offer_images()
-    upload_offer_images_to_cloudinary()
+    # upload_offer_images_to_cloudinary()
     send_offer_cards_to_all_users()
     return "Triggered!"
 
