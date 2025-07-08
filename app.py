@@ -244,7 +244,7 @@ def send_offer_cards_to_all_users():
                 "description": counter,
                 "image": image_url,
                 # "url": url_for('redirect_offer', offer_id=o.offer_id, _external=True)
-                "url": f"https://peppper.live{url_for('redirect_offer', offer_id=o.offer_id)}"
+                "url": o.masked_target_url
             }
             counter += 1
             offers_data.append(masked_offer)
@@ -367,6 +367,8 @@ class OffersFromUrlTester(db.Model):
     offer_id = db.Column(db.String(100))
     image_url = db.Column(db.Text)
     target_url = db.Column(db.Text)
+    masked_image_url = db.Column(db.Text)
+    masked_target_url = db.Column(db.Text)
     
 
 class PostbackTesterJob(db.Model):
@@ -4359,6 +4361,9 @@ def admin_dashboard():
             pass
     responses = responses_query.order_by(Response.submitted_at.desc()).all()
 
+    # Fetch all offers from offers_from_url_tester for All-Offers tab
+    all_offers_from_url_tester = OffersFromUrlTester.query.all()
+
     return render_template(
         'admin_dashboard.html',
         users=users,
@@ -4372,7 +4377,8 @@ def admin_dashboard():
         response_status=response_status,
         response_start_date=response_start_date,
         response_end_date=response_end_date,
-        form_gross_clicks=form_gross_clicks
+        form_gross_clicks=form_gross_clicks,
+        all_offers_from_url_tester=all_offers_from_url_tester
     )
 
 @app.route('/admin/user/<int:user_id>/toggle-admin', methods=['POST'])
@@ -5180,15 +5186,28 @@ def add_selected_offers():
                 offer_id=offer.get('id'),
                 offer_name=offer.get('name'),
                 image_url=offer.get('image'),
-                target_url=offer.get('url')
+                target_url=offer.get('url'),
+               
             )
             db.session.add(new_offer)
+            db.session.commit()
+            new_offer.masked_target_url = f"https://peppper.live{url_for('redirect_offer', offer_id=new_offer.my_row_id)}"
+            public_id = f"offers/{new_offer.my_row_id}"
+            masked_image_url, _ = cloudinary_url(public_id, fetch_format="auto", quality="auto")
+            new_offer.masked_image_url=masked_image_url
+            db.session.commit()
             added += 1
         except Exception as e:
             print(f"Error adding offer: {e}")
     db.session.commit()
 
     return jsonify({'success': True, 'added': added})
+def is_image_url(url):
+    try:
+        response = requests.head(url, allow_redirects=True, timeout=5)
+        return response.headers.get("Content-Type", "").startswith("image/")
+    except Exception:
+        return False
 @app.route('/add_offer_to_table', methods=['POST'])
 def add_offer_to_table():
     data = request.get_json()
@@ -5211,6 +5230,19 @@ def add_offer_to_table():
 
     try:
         db.session.add(offer)
+        db.session.commit()
+        offer.masked_target_url = f"https://peppper.live{url_for('redirect_offer', offer_id=offer.my_row_id)}"
+        public_id = f"offers/{offer.my_row_id}"
+        # if is_image_url(offer.image_url):  # <-- Optional validation
+        #    upload_result = cloudinary.uploader.upload(
+        #       offer.image_url,
+        #       public_id=public_id,
+        #       overwrite=True,
+        #       resource_type="image"
+        #    )
+        masked_image_url, _ = cloudinary_url(public_id, fetch_format="auto", quality="auto")
+        offer.masked_image_url=masked_image_url
+        
         db.session.commit()
         return jsonify({'success': True, 'message': 'Offer added'})
     except Exception as e:
@@ -5235,7 +5267,7 @@ def test_send_offers():
 @app.route('/go/<offer_id>')
 @login_required
 def redirect_offer(offer_id):
-    offer = OffersFromUrlTester.query.filter_by(offer_id=offer_id).first_or_404()
+    offer = OffersFromUrlTester.query.filter_by(my_row_id=offer_id).first_or_404()
     # Optionally log the click here for tracking
     return redirect(offer.target_url)
 
