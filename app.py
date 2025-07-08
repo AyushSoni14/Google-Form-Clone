@@ -45,6 +45,8 @@ from utils.time_features import is_active_between_hours, is_active_on_days, is_c
 from pytz import timezone as pytz_timezone, all_timezones
 from random import choice
 from urllib.parse import urlparse
+import pytz
+from datetime import time
 # Cloudinary configuration
 cloudinary.config(
     cloud_name = "dovg8wrd0",
@@ -440,8 +442,8 @@ class Form(db.Model):
     offer_preview_url = db.Column(db.String(500), nullable=True)
     offer_country = db.Column(db.String(255), nullable=True)
     offer_date = db.Column(db.Date, nullable=True)
-    active_from = db.Column(db.DateTime, nullable=True)
-    active_to = db.Column(db.DateTime, nullable=True)
+    active_start_time = db.Column(db.Time, nullable=True)
+    active_end_time = db.Column(db.Time, nullable=True)
     timezone = db.Column(db.String(64), nullable=True)
     redirect_links = db.Column(db.Text, nullable=True)  # Store as JSON string
 
@@ -913,24 +915,16 @@ def create_form():
         external_url = request.form.get('external_url')
 
         # Parse time fields BEFORE using them
-        active_from_str = request.form.get('active_from')
-        active_to_str = request.form.get('active_to')
+        active_start_time_str = request.form.get('active_start_time')
+        active_end_time_str = request.form.get('active_end_time')
         tz_name = request.form.get('timezone')
 
-        active_from = None
-        active_to = None
-        if active_from_str:
-            active_from = datetime.strptime(active_from_str, '%Y-%m-%dT%H:%M')
-            if tz_name:
-                import pytz
-                tz = pytz.timezone(tz_name)
-                active_from = tz.localize(active_from)
-        if active_to_str:
-            active_to = datetime.strptime(active_to_str, '%Y-%m-%dT%H:%M')
-            if tz_name:
-                import pytz
-                tz = pytz.timezone(tz_name)
-                active_to = tz.localize(active_to)
+        active_start_time = None
+        active_end_time = None
+        if active_start_time_str:
+            active_start_time = datetime.strptime(active_start_time_str, '%H:%M').time()
+        if active_end_time_str:
+            active_end_time = datetime.strptime(active_end_time_str, '%H:%M').time()
 
         # Now create the Form object
         form = Form(
@@ -942,8 +936,8 @@ def create_form():
             requires_consent=requires_consent,
             is_external=is_external,
             external_url=external_url,
-            active_from=active_from,
-            active_to=active_to,
+            active_start_time=active_start_time,
+            active_end_time=active_end_time,
             timezone=tz_name
         )
 
@@ -1058,9 +1052,10 @@ def view_form(form_id):
 
     now = datetime.now(tz)
 
-    active_from = ensure_aware(form.active_from, tz)
-    active_to = ensure_aware(form.active_to, tz)
-
+    # active_start_time = ensure_aware(form.active_start_time, tz)
+    # active_end_time = ensure_aware(form.active_end_time, tz)
+    active_start_time = form.active_start_time
+    active_end_time = form.active_end_time
     # Load redirect links
     redirect_links = []
     if form.redirect_links:
@@ -1075,8 +1070,12 @@ def view_form(form_id):
         else:
             return "https://www.google.com"  # fallback
 
-    # If before active_from or after active_to, redirect
-    if (active_from and now < active_from) or (active_to and now > active_to):
+    # If before active_start_time or after active_end_time, redirect
+    # if (active_start_time and now < active_start_time) or (active_end_time and now > active_end_time):
+    #     return redirect(get_redirect_link())
+    current_time = now.time()
+
+    if not is_active_time_window(current_time, active_start_time, active_end_time):
         return redirect(get_redirect_link())
 
 
@@ -4355,7 +4354,6 @@ def admin_dashboard():
         try:
             # Add 1 day to include the end date fully
             end_dt = datetime.strptime(response_end_date, '%Y-%m-%d')
-            from datetime import timedelta
             end_dt = end_dt + timedelta(days=1)
             responses_query = responses_query.filter(Response.submitted_at < end_dt)
         except ValueError:
@@ -5293,6 +5291,15 @@ def get_daily_offer(offers):
     today = datetime.now().date()
     idx = today.toordinal() % len(offers)
     return offers[idx]
+
+def is_active_time_window(current_time, start, end):
+    if not start or not end:
+        return True  # Always active if not set
+    if start < end:
+        return start <= current_time <= end
+    else:
+        # Handles overnight windows, e.g., 22:00 to 02:00
+        return current_time >= start or current_time <= end
 
 if __name__ == '__main__':
     with app.app_context():
