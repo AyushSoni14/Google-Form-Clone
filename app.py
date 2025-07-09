@@ -5269,7 +5269,7 @@ def test_send_offers():
     return "Triggered!"
 
 @app.route('/go/<offer_id>')
-@login_required
+# @login_required
 def redirect_offer(offer_id):
     offer = OffersFromUrlTester.query.filter_by(my_row_id=offer_id).first_or_404()
     now = datetime.now()
