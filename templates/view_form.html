@@ -287,6 +287,12 @@
   </div>
   {% endif %}
   
+  {% if form.active_from and form.active_to %}
+    <div class="alert alert-info">
+        This form is open from {{ form.active_from }} to {{ form.active_to }} ({{ form.timezone }})
+    </div>
+  {% endif %}
+  
   <!-- Progress bar -->
   <div class="progress-container">
     <div class="progress">

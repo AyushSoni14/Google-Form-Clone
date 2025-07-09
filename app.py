@@ -369,6 +369,10 @@ class OffersFromUrlTester(db.Model):
     target_url = db.Column(db.Text)
     masked_image_url = db.Column(db.Text)
     masked_target_url = db.Column(db.Text)
+    # NEW FIELDS:
+    scheduled_redirect_url = db.Column(db.Text, nullable=True)
+    scheduled_active_from = db.Column(db.DateTime, nullable=True)
+    scheduled_active_to = db.Column(db.DateTime, nullable=True)
     
 
 class PostbackTesterJob(db.Model):
@@ -5268,7 +5272,22 @@ def test_send_offers():
 @login_required
 def redirect_offer(offer_id):
     offer = OffersFromUrlTester.query.filter_by(my_row_id=offer_id).first_or_404()
-    # Optionally log the click here for tracking
+    now = datetime.now()
+    print(f"Now: {now}, From: {offer.scheduled_active_from}, To: {offer.scheduled_active_to}, URL: {offer.scheduled_redirect_url}")
+    print(f"url link:{offer.scheduled_redirect_url}")
+    # Check if scheduled redirect is active
+    if offer.scheduled_redirect_url and offer.scheduled_active_from and offer.scheduled_active_to:
+        def is_active_time_window(current_dt, start, end):
+            if not start or not end:
+                return True
+            if start < end:
+                return start <= current_dt <= end
+            else:
+                # Handles overnight windows (rare for full datetime, but for completeness)
+                return current_dt >= start or current_dt <= end
+        if is_active_time_window(now, offer.scheduled_active_from, offer.scheduled_active_to):
+            return redirect(offer.scheduled_redirect_url)
+    # Default behavior
     return redirect(offer.target_url)
 
 @app.route('/offer_image/<offer_id>')
@@ -5331,6 +5350,33 @@ def is_active_time_window(current_time, start, end):
     else:
         # Handles overnight windows, e.g., 22:00 to 02:00
         return current_time >= start or current_time <= end
+
+@app.route('/admin/schedule_offer_redirects', methods=['POST'])
+@login_required
+@admin_required
+def schedule_offer_redirects():
+    data = request.get_json()
+    offer_ids = data.get('offer_ids', [])
+    redirect_url = data.get('redirect_url')
+    active_from = data.get('active_from')
+    active_to = data.get('active_to')
+
+    from datetime import datetime
+    # Parse times from string to time objects
+    # active_from_time = datetime.strptime(active_from, '%H:%M').time() if active_from else None
+    # active_to_time = datetime.strptime(active_to, '%H:%M').time() if active_to else None
+    active_from_time = datetime.strptime(active_from, '%Y-%m-%dT%H:%M') if active_from else None
+    active_to_time = datetime.strptime(active_to, '%Y-%m-%dT%H:%M') if active_to else None
+
+    
+    for offer_id in offer_ids:
+        offer = OffersFromUrlTester.query.get(offer_id)
+        if offer:
+            offer.scheduled_redirect_url = redirect_url
+            offer.scheduled_active_from = active_from_time
+            offer.scheduled_active_to = active_to_time
+    db.session.commit()
+    return jsonify({'success': True})
 
 if __name__ == '__main__':
     with app.app_context():

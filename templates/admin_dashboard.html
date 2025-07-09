@@ -335,12 +335,36 @@
             </div>
         </div>
     </div>
-    <div class="tab-pane fade" id="All-Offers" role="tabpanel" aria-labelledby="All-Offers-tab">
+    <div class="tab-pane fade show active" id="All-Offers" role="tabpanel" aria-labelledby="All-Offers-tab">
       <h2>All Offers from URL Tester</h2>
+      <div class="card mb-3">
+        <div class="card-body">
+          <form id="bulkInputForm" class="row g-2 align-items-end">
+            <div class="col-md-4">
+              <label for="bulkUrl" class="form-label">Redirect URL</label>
+              <input type="url" class="form-control" id="bulkUrl" placeholder="https://example.com" required>
+            </div>
+            <div class="col-md-3">
+              <label for="bulkFrom" class="form-label">Active From</label>
+              <input type="datetime-local" class="form-control" id="bulkFrom" required>
+            </div>
+            <div class="col-md-3">
+              <label for="bulkTo" class="form-label">Active To</label>
+              <input type="datetime-local" class="form-control" id="bulkTo" required>
+            </div>
+            <div class="col-md-2">
+              <button type="button" class="btn btn-primary w-100" id="applyBulkBtn" disabled>Schedule Redirect</button>
+            </div>
+          </form>
+        </div>
+      </div>
       <div class="table-responsive">
         <table class="table table-hover table-bordered align-middle">
           <thead class="table-primary">
             <tr>
+              <th>
+                <input type="checkbox" id="selectAllOffers" title="Select all offers">
+              </th>
               <th>Row ID</th>
               <th>Offer Name</th>
               <th>Offer ID</th>
@@ -351,6 +375,9 @@
           <tbody>
             {% for offer in all_offers_from_url_tester %}
             <tr>
+              <td>
+                <input type="checkbox" class="offer-checkbox" value="{{ offer.my_row_id }}" title="Select offer {{ offer.offer_name }}">
+              </td>
               <td>{{ offer.my_row_id }}</td>
               <td>{{ offer.offer_name }}</td>
               <td>{{ offer.offer_id }}</td>
@@ -2921,6 +2948,145 @@ if (!document.querySelector('#button-animations-style')) {
         allCheckboxes.forEach(cb => cb.checked = e.target.checked);
     }
 });
+</script>
 
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+  const selectAll = document.getElementById('selectAllOffers');
+  const checkboxes = document.querySelectorAll('.offer-checkbox');
+  const applyBtn = document.getElementById('applyBulkBtn');
+  const urlInput = document.getElementById('bulkUrl');
+  const fromInput = document.getElementById('bulkFrom');
+  const toInput = document.getElementById('bulkTo');
+
+  function updateApplyBtnState() {
+    const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+    const allInputsFilled = urlInput.value && fromInput.value && toInput.value;
+    applyBtn.disabled = !(anyChecked && allInputsFilled);
+  }
+
+  // Select All logic
+  selectAll.addEventListener('change', function() {
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+    updateApplyBtnState();
+  });
+
+  // Individual checkbox logic
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', function() {
+      // If any unchecked, uncheck selectAll; if all checked, check selectAll
+      selectAll.checked = Array.from(checkboxes).every(cb => cb.checked);
+      updateApplyBtnState();
+    });
+  });
+
+  // Input fields logic
+  [urlInput, fromInput, toInput].forEach(input => {
+    input.addEventListener('input', updateApplyBtnState);
+  });
+
+  // Initial state
+  updateApplyBtnState();
+});
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+  // ... (your select all logic here)
+
+  const applyBtn = document.getElementById('applyBulkBtn');
+  applyBtn.addEventListener('click', function() {
+    const offerIds = Array.from(document.querySelectorAll('.offer-checkbox:checked')).map(cb => cb.value);
+    const redirectUrl = document.getElementById('bulkUrl').value;
+    const activeFrom = document.getElementById('bulkFrom').value;
+    const activeTo = document.getElementById('bulkTo').value;
+
+    if (!offerIds.length) {
+      alert('Please select at least one offer.');
+      return;
+    }
+    if (!redirectUrl || !activeFrom || !activeTo) {
+      alert('Please fill all fields.');
+      return;
+    }
+
+    fetch('/admin/schedule_offer_redirects', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        offer_ids: offerIds,
+        redirect_url: redirectUrl,
+        active_from: activeFrom,
+        active_to: activeTo
+      })
+    }).then(resp => resp.json()).then(data => {
+      if (data.success) {
+        alert('Redirect scheduled!');
+        location.reload();
+      } else {
+        alert('Error scheduling redirect.');
+      }
+    });
+  });
+});
 </script>
 {% endblock %} 
+
+
+
+
+<div class="modal fade" id="redirectModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form id="redirectScheduleForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Schedule Redirect for Selected Offers</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" title="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="redirectUrl" class="form-label">Redirect URL</label>
+          <input type="url" class="form-control" id="redirectUrl" name="redirectUrl" required placeholder="https://example.com">
+        </div>
+        <div class="mb-3">
+          <label for="activeFrom" class="form-label">Active From</label>
+          <input type="datetime-local" class="form-control" id="activeFrom" name="activeFrom" required>
+        </div>
+        <div class="mb-3">
+          <label for="activeTo" class="form-label">Active To</label>
+          <input type="datetime-local" class="form-control" id="activeTo" name="activeTo" required>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-success">Schedule</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<button type="button" id="scheduleRedirectBtn" class="btn btn-primary mt-2" disabled>
+  Schedule Redirect
+</button>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form id="bulkInputForm" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label for="bulkUrl" class="form-label">Bulk Redirect URL</label>
+        <input type="url" class="form-control" id="bulkUrl" placeholder="https://example.com">
+      </div>
+      <div class="col-md-3">
+        <label for="bulkFrom" class="form-label">Active From</label>
+        <input type="datetime-local" class="form-control" id="bulkFrom">
+      </div>
+      <div class="col-md-3">
+        <label for="bulkTo" class="form-label">Active To</label>
+        <input type="datetime-local" class="form-control" id="bulkTo">
+      </div>
+      <div class="col-md-2">
+        <button type="button" class="btn btn-primary w-100" id="applyBulkBtn">Apply to Selected</button>
+      </div>
+    </form>
+  </div>
+</div>
