@@ -370,6 +370,7 @@
               <th>Offer ID</th>
               <th>Image</th>
               <th>Target URL</th>
+              <th>Redirected URL</th>
             </tr>
           </thead>
           <tbody>
@@ -395,6 +396,13 @@
                   <span class="text-muted">No URL</span>
                 {% endif %}
               </td>
+              <td>
+                {% if offer.scheduled_redirect_url %}
+                    <a href="{{ offer.scheduled_redirect_url }}" target="_blank">{{ offer.scheduled_redirect_url }}</a>
+                {% else %}
+                    <span class="text-muted">No URL</span>
+                {% endif %}
+                </td>
             </tr>
             {% endfor %}
           </tbody>
