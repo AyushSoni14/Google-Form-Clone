@@ -47,6 +47,8 @@ from random import choice
 from urllib.parse import urlparse
 import pytz
 from datetime import time
+from sqlalchemy.ext.mutable import MutableList
+from sqlalchemy import PickleType
 # Cloudinary configuration
 cloudinary.config(
     cloud_name = "dovg8wrd0",
@@ -370,7 +372,7 @@ class OffersFromUrlTester(db.Model):
     masked_image_url = db.Column(db.Text)
     masked_target_url = db.Column(db.Text)
     # NEW FIELDS:
-    scheduled_redirect_url = db.Column(db.Text, nullable=True)
+    scheduled_redirect_urls = db.Column(db.Text, nullable=True)  # store as JSON string
     scheduled_active_from = db.Column(db.DateTime, nullable=True)
     scheduled_active_to = db.Column(db.DateTime, nullable=True)
     
@@ -5269,24 +5271,29 @@ def test_send_offers():
     return "Triggered!"
 
 @app.route('/go/<offer_id>')
-# @login_required
 def redirect_offer(offer_id):
     offer = OffersFromUrlTester.query.filter_by(my_row_id=offer_id).first_or_404()
     now = datetime.now()
-    print(f"Now: {now}, From: {offer.scheduled_active_from}, To: {offer.scheduled_active_to}, URL: {offer.scheduled_redirect_url}")
-    print(f"url link:{offer.scheduled_redirect_url}")
+    # Load URLs as list
+    redirect_urls = []
+    if offer.scheduled_redirect_urls:
+        try:
+            redirect_urls = json.loads(offer.scheduled_redirect_urls)
+        except Exception:
+            redirect_urls = []
     # Check if scheduled redirect is active
-    if offer.scheduled_redirect_url and offer.scheduled_active_from and offer.scheduled_active_to:
+    if redirect_urls and offer.scheduled_active_from and offer.scheduled_active_to:
         def is_active_time_window(current_dt, start, end):
             if not start or not end:
                 return True
             if start < end:
                 return start <= current_dt <= end
             else:
-                # Handles overnight windows (rare for full datetime, but for completeness)
                 return current_dt >= start or current_dt <= end
         if is_active_time_window(now, offer.scheduled_active_from, offer.scheduled_active_to):
-            return redirect(offer.scheduled_redirect_url)
+            # Pick a random URL
+            chosen_url = random.choice(redirect_urls)
+            return redirect(chosen_url)
     # Default behavior
     return redirect(offer.target_url)
 
@@ -5372,7 +5379,12 @@ def schedule_offer_redirects():
     for offer_id in offer_ids:
         offer = OffersFromUrlTester.query.get(offer_id)
         if offer:
-            offer.scheduled_redirect_url = redirect_url
+            redirect_urls_raw = data.get('redirect_url', '')  # could be comma-separated or newline-separated
+            # Split by comma or newline, strip whitespace, remove empties
+            redirect_urls = [url.strip() for url in re.split(r'[\n,]+', redirect_urls_raw) if url.strip()]
+
+            # Save as JSON string
+            offer.scheduled_redirect_urls = json.dumps(redirect_urls)
             offer.scheduled_active_from = active_from_time
             offer.scheduled_active_to = active_to_time
     db.session.commit()

@@ -399,12 +399,15 @@
                 {% endif %}
               </td>
               <td>
-                {% if offer.scheduled_redirect_url %}
-                    <a href="{{ offer.scheduled_redirect_url }}" target="_blank">{{ offer.scheduled_redirect_url }}</a>
+                {% if offer.scheduled_redirect_urls %}
+                  {% set urls = offer.scheduled_redirect_urls | fromjson %}
+                  {% for url in urls %}
+                    <a href="{{ url }}" target="_blank">{{ url }}</a>{% if not loop.last %}, {% endif %}
+                  {% endfor %}
                 {% else %}
-                    <span class="text-muted">No URL</span>
+                  <span class="text-muted">No URL</span>
                 {% endif %}
-                </td>
+              </td>
                 <td>
                     {% if offer.scheduled_active_from %}
                         {{ offer.scheduled_active_from.strftime('%Y-%m-%d %H:%M:%S') }}
