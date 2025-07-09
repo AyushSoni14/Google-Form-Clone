@@ -371,6 +371,8 @@
               <th>Image</th>
               <th>Target URL</th>
               <th>Redirected URL</th>
+              <th>active from</th>
+              <th>active upto</th>
             </tr>
           </thead>
           <tbody>
@@ -403,6 +405,20 @@
                     <span class="text-muted">No URL</span>
                 {% endif %}
                 </td>
+                <td>
+                    {% if offer.scheduled_active_from %}
+                        {{ offer.scheduled_active_from.strftime('%Y-%m-%d %H:%M:%S') }}
+                    {% else %}
+                        <span class="text-muted">No Time Alloted</span>
+                    {% endif %}
+                    </td>
+                    <td>
+                        {% if offer.scheduled_active_to %}
+                            {{ offer.scheduled_active_to.strftime('%Y-%m-%d %H:%M:%S') }}
+                        {% else %}
+                            <span class="text-muted">No Time Alloted</span>
+                        {% endif %}
+                        </td>
             </tr>
             {% endfor %}
           </tbody>
