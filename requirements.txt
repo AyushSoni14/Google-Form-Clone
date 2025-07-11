@@ -21,3 +21,4 @@ Flask-Mail
 aiohttp
 pytz
 cloudinary
+imapclient

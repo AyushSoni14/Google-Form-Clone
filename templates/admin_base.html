@@ -74,6 +74,9 @@
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('email_dashboard') }}">Email Dashboard</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('email_replies') }}">Email Replies</a>
+                          </li>
                     {% endif %}
                 </ul>
             </div>
@@ -111,6 +114,16 @@
                             </a>
                         </li>
                         {# Add more admin-specific sidebar links here #}
+                        <li class="nav-item">
+                            <a class="nav-link" href="#domain-cheker" data-bs-toggle="tab">
+                                Domain Checker
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#All-Offers" data-bs-toggle="tab">
+                                All Offers
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </nav>

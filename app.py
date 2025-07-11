@@ -571,6 +571,16 @@ class Question(db.Model):
     subquestions = relationship('SubQuestion', backref='parent_question', lazy=True, 
                                cascade='all, delete-orphan')
 
+class ImapConfig(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    imap_server = db.Column(db.String(255), nullable=False)
+    imap_port = db.Column(db.Integer, nullable=False, default=993)
+    imap_username = db.Column(db.String(255), nullable=False)
+    imap_password = db.Column(db.String(255), nullable=False)
+    mailbox = db.Column(db.String(255), nullable=True, default='INBOX')
+    label = db.Column(db.String(255), nullable=True)  # e.g., "Support Inbox"
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 class EmailConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     smtp_server = db.Column(db.String(255), nullable=False)
@@ -5584,6 +5594,76 @@ def email_dashboard():
     logs = SentEmailLog.query.order_by(SentEmailLog.sent_at.desc()).limit(100).all()
     return render_template('admin_email_dashboard.html', logs=logs)
 
+@app.route('/admin/imap-config', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_imap_config():
+    imap_config = ImapConfig.query.first()
+    if request.method == 'POST':
+        if not imap_config:
+            imap_config = ImapConfig()
+            db.session.add(imap_config)
+        imap_config.imap_server = request.form['imap_server']
+        imap_config.imap_port = int(request.form['imap_port'])
+        imap_config.imap_username = request.form['imap_username']
+        imap_config.imap_password = request.form['imap_password']
+        imap_config.mailbox = request.form.get('mailbox', 'INBOX')
+        imap_config.label = request.form.get('label', '')
+        db.session.commit()
+        flash('IMAP configuration saved!', 'success')
+        return redirect(url_for('admin_imap_config'))
+    return render_template('admin_imap_config.html', imap_config=imap_config)
+
+from imapclient import IMAPClient
+import email
+from email.header import decode_header
+
+def fetch_recent_replies(imap_config, since_days=7):
+    replies = []
+    if not imap_config or not imap_config.imap_server or not imap_config.imap_username or not imap_config.imap_password:
+        return replies
+
+    try:
+        with IMAPClient(imap_config.imap_server, port=imap_config.imap_port or 993, ssl=True) as server:
+            server.login(imap_config.imap_username, imap_config.imap_password)
+            server.select_folder(imap_config.mailbox or 'INBOX')
+            # Search for all emails from the last N days
+            import datetime
+            since = (datetime.datetime.now() - datetime.timedelta(days=since_days)).strftime('%d-%b-%Y')
+            messages = server.search(['SINCE', since])
+            for uid, message_data in server.fetch(messages, ['ENVELOPE', 'RFC822']).items():
+                msg = email.message_from_bytes(message_data[b'RFC822'])
+                subject, encoding = decode_header(msg['Subject'])[0]
+                if isinstance(subject, bytes):
+                    subject = subject.decode(encoding or 'utf-8', errors='replace')
+                from_email = email.utils.parseaddr(msg.get('From'))[1]
+                date = msg.get('Date')
+                # Get the plain text part
+                body = ""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        if part.get_content_type() == "text/plain":
+                            body = part.get_payload(decode=True).decode(errors='replace')
+                            break
+                else:
+                    body = msg.get_payload(decode=True).decode(errors='replace')
+                replies.append({
+                    'from_email': from_email,
+                    'subject': subject,
+                    'date': date,
+                    'body': body[:500]  # limit for preview
+                })
+    except Exception as e:
+        print(f"IMAP fetch error: {e}")
+    return replies
+
+@app.route('/admin/email-replies')
+@login_required
+@admin_required
+def email_replies():
+    imap_config = ImapConfig.query.first()
+    replies = fetch_recent_replies(imap_config)
+    return render_template('admin_email_replies.html', replies=replies)
 
 if __name__ == '__main__':
     with app.app_context():
