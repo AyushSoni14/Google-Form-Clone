@@ -227,8 +227,52 @@ mail = Mail(app)
 
 # Daily report email task
 from flask import render_template
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from flask_mail import Message
+def send_offer_cards_to_bulk():
+    with app.app_context():
+        offers = OffersFromUrlTester.query.all()  # or whatever logic you want
+        offers_data = []
+        counter = 1
+        for o in offers:
+            if not o.offer_id:
+                print("Offer with missing offer_id:", o)
+                continue  # skip this offer
+            # Use Cloudinary URL for the image
+            # public_id = f"offers/{o.offer_id}"
+            # image_url, _ = cloudinary_url(public_id, fetch_format="auto", quality="auto")
+            masked_offer = {
+                "name": o.offer_name,
+                "description": o.my_row_id,
+                "image": o.masked_image_url,
+                # "url": url_for('redirect_offer', offer_id=o.offer_id, _external=True)
+                "url": o.masked_target_url
+            }
+            counter += 1
+            offers_data.append(masked_offer)
+        print("offers_data=", offers_data)
 
+        users = User.query.all()
+        
 
+        for user in users:
+            html = render_template(
+                'email/new_offer_digest.html',
+                user=user,
+                offers=offers
+            )
+            msg = Message(
+                subject=subject,
+                recipients=[user.email],
+                html=html,
+                sender=config.sender_email
+            )
+            try:
+                mail.send(msg)
+            except Exception as e:
+                flash(f"Failed to send to {user.email}: {e}", 'danger')
 def send_offer_cards_to_all_users():
     with app.app_context():
         offers = OffersFromUrlTester.query.all()  # or whatever logic you want
@@ -527,6 +571,18 @@ class Question(db.Model):
     subquestions = relationship('SubQuestion', backref='parent_question', lazy=True, 
                                cascade='all, delete-orphan')
 
+class EmailConfig(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    smtp_server = db.Column(db.String(255), nullable=False)
+    smtp_port = db.Column(db.Integer, nullable=False)
+    smtp_username = db.Column(db.String(255), nullable=False)
+    smtp_password = db.Column(db.String(255), nullable=False)
+    sender_name = db.Column(db.String(255), nullable=True)
+    sender_email = db.Column(db.String(255), nullable=False)
+    use_tls = db.Column(db.Boolean, default=True)
+    use_ssl = db.Column(db.Boolean, default=False)
+
+
     def get_options(self):
         import json
         if self.options:
@@ -683,6 +739,20 @@ class FormView(db.Model):
     ip_address = db.Column(db.String(50), nullable=True)
     session_id = db.Column(db.String(100), nullable=True)
     form = db.relationship('Form', backref='views')
+
+class SentEmailLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    to_email = db.Column(db.String(255), nullable=False)
+    subject = db.Column(db.String(255), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
+    offer_ids = db.Column(db.Text)  # JSON list of offer IDs
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    status = db.Column(db.String(50), default='sent')  # sent/failed
+    error_message = db.Column(db.Text, nullable=True)
+
+
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -5281,6 +5351,7 @@ def redirect_offer(offer_id):
             redirect_urls = json.loads(offer.scheduled_redirect_urls)
         except Exception:
             redirect_urls = []
+    print(redirect_urls)
     # Check if scheduled redirect is active
     if redirect_urls and offer.scheduled_active_from and offer.scheduled_active_to:
         def is_active_time_window(current_dt, start, end):
@@ -5389,6 +5460,130 @@ def schedule_offer_redirects():
             offer.scheduled_active_to = active_to_time
     db.session.commit()
     return jsonify({'success': True})
+
+@app.route('/admin/email-config', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_email_config():
+    config = EmailConfig.query.first()
+    if request.method == 'POST':
+        # Save/update config
+        if not config:
+            config = EmailConfig()
+            db.session.add(config)
+        config.smtp_server = request.form['smtp_server']
+        config.smtp_port = int(request.form['smtp_port'])
+        config.smtp_username = request.form['smtp_username']
+        config.smtp_password = request.form['smtp_password']
+        config.sender_name = request.form.get('sender_name', '')
+        config.sender_email = request.form['sender_email']
+        config.use_tls = 'use_tls' in request.form
+        config.use_ssl = 'use_ssl' in request.form
+        db.session.commit()
+        flash('Email configuration saved!', 'success')
+        return redirect(url_for('admin_email_config'))
+    offers = OffersFromUrlTester.query.all()
+    users = User.query.all()
+    return render_template('admin_email_config.html', config=config, offers=offers, users=users)
+
+import json
+
+@app.route('/admin/send-bulk-email', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_send_bulk_email():
+    if request.method == 'GET':
+        # Optionally, redirect to the config page or show a message
+        return redirect(url_for('admin_email_config'))
+
+    print("Bulk email route triggered")
+    config = EmailConfig.query.first()
+    if not config:
+        flash('Please configure email settings first.', 'danger')
+        return redirect(url_for('admin_email_config'))
+
+    offer_ids = request.form.getlist('offer_ids')
+    user_ids = request.form.getlist('user_ids')
+    subject = request.form['subject']
+
+    print("Selected offer_ids:", offer_ids)
+    print("Selected user_ids:", user_ids)
+    print("Subject:", subject)
+
+    offers = OffersFromUrlTester.query.filter(OffersFromUrlTester.my_row_id.in_(offer_ids)).all()
+    users = User.query.filter(User.id.in_(user_ids)).all()
+
+    # Update Flask-Mail config dynamically
+    app.config.update(
+        MAIL_SERVER=config.smtp_server,
+        MAIL_PORT=config.smtp_port,
+        MAIL_USERNAME=config.smtp_username,
+        MAIL_PASSWORD=config.smtp_password,
+        MAIL_USE_TLS=config.use_tls,
+        MAIL_USE_SSL=config.use_ssl,
+        MAIL_DEFAULT_SENDER=config.sender_email
+    )
+
+    for user in users:
+        html = render_template(
+            'email/offer_digest.html',
+            user=user,
+            offers=offers
+        )
+        msg = Message(
+            subject=subject,
+            recipients=[user.email],
+            html=html,
+            sender=config.sender_email
+        )
+        try:
+            mail.send(msg)
+            print(f"Sent to {user.email}")
+        except Exception as e:
+            print(f"Failed to send to {user.email}: {e}")
+            flash(f"Failed to send to {user.email}: {e}", 'danger')
+        for user in users:
+            html = render_template(
+                'email/offer_digest.html',
+                user=user,
+                offers=offers
+            )
+            msg = Message(
+                subject=subject,
+                recipients=[user.email],
+                html=html,
+                sender=config.sender_email
+            )
+            try:
+                mail.send(msg)
+                status = 'sent'
+                error_message = None
+            except Exception as e:
+                status = 'failed'
+                error_message = str(e)
+                flash(f"Failed to send to {user.email}: {e}", 'danger')
+            # Log the email
+            log = SentEmailLog(
+                to_email=user.email,
+                subject=subject,
+                body=html,
+                offer_ids=json.dumps(offer_ids),
+                user_id=user.id,
+                status=status,
+                error_message=error_message
+            )
+            db.session.add(log)
+        db.session.commit()
+    flash('Emails sent!', 'success')
+    return redirect(url_for('admin_email_config'))
+
+@app.route('/admin/email-dashboard')
+@login_required
+@admin_required
+def email_dashboard():
+    logs = SentEmailLog.query.order_by(SentEmailLog.sent_at.desc()).limit(100).all()
+    return render_template('admin_email_dashboard.html', logs=logs)
+
 
 if __name__ == '__main__':
     with app.app_context():
