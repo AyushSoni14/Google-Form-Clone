@@ -411,14 +411,20 @@ class OffersFromUrlTester(db.Model):
     my_row_id = db.Column(db.BigInteger, primary_key=True)
     offer_name = db.Column(db.String(255))
     offer_id = db.Column(db.String(100))
+    payout = db.Column(db.String(100))
+    countries   = db.Column(db.String(255))
+    description = db.Column(db.Text)
     image_url = db.Column(db.Text)
     target_url = db.Column(db.Text)
     masked_image_url = db.Column(db.Text)
     masked_target_url = db.Column(db.Text)
+
     # NEW FIELDS:
     scheduled_redirect_urls = db.Column(db.Text, nullable=True)  # store as JSON string
     scheduled_active_from = db.Column(db.DateTime, nullable=True)
     scheduled_active_to = db.Column(db.DateTime, nullable=True)
+    # URL SCHEDULING DATA:
+    url_scheduling_data = db.Column(db.Text, nullable=True)  # store as JSON string for multiple URL schedules
     
 
 class PostbackTesterJob(db.Model):
@@ -4589,32 +4595,6 @@ def proxy_postback():
         return jsonify({'error': str(e)}), 500
 from flask import request, render_template
 
-# logs = []  # In-memory store, use DB if needed
-
-# @app.route('/postback_data')
-# def postback_data():
-#     data = {
-#         "offerid": request.args.get("offerid"),
-#         "name": request.args.get("name"),
-#         "rate": request.args.get("rate"),
-#         "sub1": request.args.get("sub1"),
-#         "status": request.args.get("status"),
-#         "ip": request.args.get("ip"),
-#     }
-#     logs.append(data)
-#     return jsonify({"status": "received", "data": data})
-
-# @app.route('/logs')
-# def show_logs():
-#     html = """
-#     <h2>Postback Logs</h2>
-#     <ul>
-#     {% for log in logs %}
-#       <li>{{ log }}</li>
-#     {% endfor %}
-#     </ul>
-#     """
-#     return render_template_string(html, logs=logs)
 
 
 
@@ -5036,57 +5016,7 @@ PROXY_CONFIG = {
     }
 }
 
-# In-memory storage for URLs
 
-
-# def test_url_with_proxy(url, country_code):
-#     """Test a single URL with the appropriate proxy and also check IP country"""
-#     if country_code not in PROXY_CONFIG['proxy_map']:
-#         return {"status": f"❌ No proxy configured for country '{country_code}'", "ip_country": "N/A"}
-    
-#     proxy_info = PROXY_CONFIG['proxy_map'][country_code]
-#     proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{proxy_info['host']}:{proxy_info['port']}"
-    
-#     proxies = {
-#         'http': proxy_url,
-#         'https': proxy_url
-#     }
-    
-#     url_status = ""
-#     ip_country = "Unknown"
-    
-#     try:
-#         # First, test the actual URL
-#         response = requests.get(url, proxies=proxies, timeout=30)
-        
-#         if response.status_code == 200:
-#             url_status = "✅ 200 OK"
-#         else:
-#             url_status = f"⚠️ Status Code: {response.status_code}"
-            
-#     except requests.exceptions.Timeout:
-#         url_status = "❌ Failed: Timeout"
-#     except requests.exceptions.ConnectionError:
-#         url_status = "❌ Failed: Connection Error"
-#     except requests.exceptions.RequestException as e:
-#         url_status = f"❌ Failed: {str(e)}"
-#     except Exception as e:
-#         url_status = f"❌ Error: {str(e)}"
-    
-#     # Now check the IP country using the same proxy
-#     try:
-#         ip_check = requests.get('https://ip.decodo.com/json', proxies=proxies, timeout=15)
-#         if ip_check.status_code == 200:
-#             ip_data = ip_check.json()
-#             ip_country = ip_data.get("country", {}).get("name", "Unknown")
-#         else:
-#             ip_country = "Check Failed"
-#     except requests.exceptions.RequestException:
-#         ip_country = "Check Failed"
-#     except Exception:
-#         ip_country = "Check Failed"
-    
-#     return {"status": url_status, "ip_country": ip_country}
 import aiohttp
 import asyncio
 
@@ -5123,59 +5053,7 @@ async def test_url_with_proxy_async(session, url, proxy_url):
     return status_result, ip_country
 
 
-# @app.route('/api_tester_selectred-row', methods=['POST'])
-# def api_tester_selected_row():
-#     data = request.get_json()
-    
-#     # New structure: expect array of objects with url and countries
-#     url_country_pairs = data.get('url_country_pairs', [])
-    
-#     # For backward compatibility, also handle the old structure
-#     if not url_country_pairs:
-#         urls = data.get('urls', [])
-#         countries = data.get('countries', [])
-#         # Convert old structure to new structure
-#         url_country_pairs = []
-#         for url in urls:
-#             url_country_pairs.append({
-#                 'url': url,
-#                 'countries': countries
-#             })
 
-#     results = []
-#     for pair in url_country_pairs:
-#         url = pair.get('url')
-#         countries = pair.get('countries', [])
-#         offer_data = pair.get('offer_data', {})  # Include offer data if provided
-        
-#         if not url or not countries:
-#             continue
-            
-#         # Test this URL with only its associated countries
-#         for country in countries:
-#             test_result = test_url_with_proxy(url, country)
-            
-#             # Create result with offer details and proxy test results
-#             result = {
-#                 'url': url,
-#                 'country': country,
-#                 'status': test_result['status'],
-#                 'ip_country': test_result['ip_country']
-#             }
-            
-#             # Add offer details if available
-#             if offer_data:
-#                 result.update({
-#                     'id': offer_data.get('id', 'N/A'),
-#                     'name': offer_data.get('name', 'N/A'),
-#                     'image': offer_data.get('image', ''),
-#                     'countries': offer_data.get('countries', []),
-#                     'payout': offer_data.get('payout', 'N/A')
-#                 })
-            
-#             results.append(result)
-
-#     return jsonify({'results': results}), 200
 
 @app.route('/api_tester_selectred-row', methods=['POST'])
 def api_tester_selected_row():
@@ -5273,7 +5151,9 @@ def add_selected_offers():
                 offer_name=offer.get('name'),
                 image_url=offer.get('image'),
                 target_url=offer.get('url'),
-               
+                payout=offer.get('payout'),
+                countries=offer.get('countries'),
+                description=offer.get('description')
             )
             db.session.add(new_offer)
             db.session.commit()
@@ -5311,7 +5191,10 @@ def add_offer_to_table():
         offer_name=data.get('offer_name'),
         offer_id=offer_id,
         image_url=data.get('image_url'),
-        target_url=data.get('target_url')
+        target_url=data.get('target_url'),
+        payout=data.get('payout'),
+        countries=data.get('countries'),
+        description=data.get('description')
     )
 
     try:
@@ -5350,33 +5233,134 @@ def test_send_offers():
     send_offer_cards_to_all_users()
     return "Triggered!"
 
+def get_scheduled_url(offer):
+    """
+    Get the appropriate URL from url_scheduling_data based on current time and date.
+    Returns the URL if current time matches any schedule, otherwise returns target_url.
+    """
+    if not offer.url_scheduling_data:
+        return offer.target_url
+    
+    try:
+        scheduling_data = json.loads(offer.url_scheduling_data)
+    except (json.JSONDecodeError, TypeError):
+        return offer.target_url
+    
+    if not scheduling_data or not isinstance(scheduling_data, list):
+        return offer.target_url
+    
+    now = datetime.now()
+    current_time = now.time()
+    current_date = now.date()
+    
+    for schedule in scheduling_data:
+        if not isinstance(schedule, dict):
+            continue
+            
+        url = schedule.get('url', '').strip()
+        if not url:
+            continue
+        
+        # Check if current date is within the date range
+        start_date_str = schedule.get('start_date', '').strip()
+        end_date_str = schedule.get('end_date', '').strip()
+        
+        # If dates are specified, check if current date is within range
+        if start_date_str or end_date_str:
+            try:
+                if start_date_str:
+                    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                    if current_date < start_date:
+                        continue
+                
+                if end_date_str:
+                    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                    if current_date > end_date:
+                        continue
+            except ValueError:
+                # Invalid date format, skip this schedule
+                continue
+        
+        # Check if current time is within the time range
+        start_time_str = schedule.get('start_time', '').strip()
+        end_time_str = schedule.get('end_time', '').strip()
+        
+        # If times are specified, check if current time is within range
+        if start_time_str or end_time_str:
+            try:
+                if start_time_str:
+                    start_time = datetime.strptime(start_time_str, '%H:%M').time()
+                else:
+                    start_time = None
+                
+                if end_time_str:
+                    end_time = datetime.strptime(end_time_str, '%H:%M').time()
+                else:
+                    end_time = None
+                
+                # Check if current time is within the time window
+                if start_time and end_time:
+                    if start_time <= end_time:
+                        # Same day time window (e.g., 09:00 to 17:00)
+                        if not (start_time <= current_time <= end_time):
+                            continue
+                    else:
+                        # Overnight time window (e.g., 22:00 to 06:00)
+                        if not (current_time >= start_time or current_time <= end_time):
+                            continue
+                elif start_time:
+                    # Only start time specified
+                    if current_time < start_time:
+                        continue
+                elif end_time:
+                    # Only end time specified
+                    if current_time > end_time:
+                        continue
+                        
+            except ValueError:
+                # Invalid time format, skip this schedule
+                continue
+        
+        # If we reach here, this schedule matches current time and date
+        return url
+    
+    # No matching schedule found, return target_url
+    return offer.target_url
+
 @app.route('/go/<offer_id>')
 def redirect_offer(offer_id):
     offer = OffersFromUrlTester.query.filter_by(my_row_id=offer_id).first_or_404()
-    now = datetime.now()
-    # Load URLs as list
-    redirect_urls = []
-    if offer.scheduled_redirect_urls:
-        try:
-            redirect_urls = json.loads(offer.scheduled_redirect_urls)
-        except Exception:
-            redirect_urls = []
-    print(redirect_urls)
-    # Check if scheduled redirect is active
-    if redirect_urls and offer.scheduled_active_from and offer.scheduled_active_to:
-        def is_active_time_window(current_dt, start, end):
-            if not start or not end:
-                return True
-            if start < end:
-                return start <= current_dt <= end
-            else:
-                return current_dt >= start or current_dt <= end
-        if is_active_time_window(now, offer.scheduled_active_from, offer.scheduled_active_to):
-            # Pick a random URL
-            chosen_url = random.choice(redirect_urls)
-            return redirect(chosen_url)
-    # Default behavior
-    return redirect(offer.target_url)
+    
+    # First check URL scheduling data
+    scheduled_url = get_scheduled_url(offer)
+    # if scheduled_url and scheduled_url != offer.target_url:
+    return redirect(scheduled_url)
+    
+    # Fallback to the old scheduled_redirect_urls logic
+    # now = datetime.now()
+    # # Load URLs as list
+    # redirect_urls = []
+    # if offer.scheduled_redirect_urls:
+    #     try:
+    #         redirect_urls = json.loads(offer.scheduled_redirect_urls)
+    #     except Exception:
+    #         redirect_urls = []
+    # print(redirect_urls)
+    # # Check if scheduled redirect is active
+    # if redirect_urls and offer.scheduled_active_from and offer.scheduled_active_to:
+    #     def is_active_time_window(current_dt, start, end):
+    #         if not start or not end:
+    #             return True
+    #         if start < end:
+    #             return start <= current_dt <= end
+    #         else:
+    #             return current_dt >= start or current_dt <= end
+    #     if is_active_time_window(now, offer.scheduled_active_from, offer.scheduled_active_to):
+    #         # Pick a random URL
+    #         chosen_url = random.choice(redirect_urls)
+    #         return redirect(chosen_url)
+    # # Default behavior
+    # return redirect(offer.target_url)
 
 @app.route('/offer_image/<offer_id>')
 def offer_image(offer_id):
@@ -5471,6 +5455,84 @@ def schedule_offer_redirects():
     db.session.commit()
     return jsonify({'success': True})
 
+@app.route('/admin/save_url_scheduling', methods=['POST'])
+@login_required
+@admin_required
+def save_url_scheduling():
+    data = request.get_json()
+    offer_id = data.get('offer_id')
+    scheduling_data = data.get('scheduling_data', [])
+    
+    try:
+        offer = OffersFromUrlTester.query.get(offer_id)
+        if not offer:
+            return jsonify({'success': False, 'error': 'Offer not found'}), 404
+        
+        # Store the scheduling data as JSON
+        offer.url_scheduling_data = json.dumps(scheduling_data)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'URL scheduling data saved successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/admin/get_url_scheduling/<int:offer_id>', methods=['GET'])
+@login_required
+@admin_required
+def get_url_scheduling(offer_id):
+    try:
+        offer = OffersFromUrlTester.query.get(offer_id)
+        if not offer:
+            return jsonify({'success': False, 'error': 'Offer not found'}), 404
+        
+        scheduling_data = []
+        if offer.url_scheduling_data:
+            try:
+                scheduling_data = json.loads(offer.url_scheduling_data)
+            except json.JSONDecodeError:
+                scheduling_data = []
+        
+        return jsonify({'success': True, 'scheduling_data': scheduling_data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/admin/append_url_scheduling', methods=['POST'])
+@login_required
+@admin_required
+def append_url_scheduling():
+    data = request.get_json()
+    offer_id = data.get('offer_id')
+    scheduling_data = data.get('scheduling_data', [])
+    
+    try:
+        offer = OffersFromUrlTester.query.get(offer_id)
+        if not offer:
+            return jsonify({'success': False, 'error': 'Offer not found'}), 404
+        
+        # Get existing scheduling data
+        existing_data = []
+        if offer.url_scheduling_data:
+            try:
+                existing_data = json.loads(offer.url_scheduling_data)
+            except json.JSONDecodeError:
+                existing_data = []
+        
+        # Append new scheduling data to existing data
+        combined_data = existing_data + scheduling_data
+        
+        # Store the combined scheduling data as JSON
+        offer.url_scheduling_data = json.dumps(combined_data)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'URL scheduling data appended successfully. Total entries: {len(combined_data)}'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/admin/email-config', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -5522,6 +5584,10 @@ def admin_send_bulk_email():
 
     offers = OffersFromUrlTester.query.filter(OffersFromUrlTester.my_row_id.in_(offer_ids)).all()
     users = User.query.filter(User.id.in_(user_ids)).all()
+    # Print offer details in a readable way
+    # scheduled_url = get_scheduled_url(offer)
+    for offer in offers:
+        print(f"Offer ID: {offer.my_row_id}, Name: {offer.offer_name}, Offer ID: {offer.offer_id}, Target URL: {offer.target_url}")
 
     # Update Flask-Mail config dynamically
     app.config.update(
@@ -5534,6 +5600,12 @@ def admin_send_bulk_email():
         MAIL_DEFAULT_SENDER=config.sender_email
     )
 
+    # The following code has issues:
+    # 1. There is a nested loop over users inside the outer loop over users, which is incorrect and will send duplicate emails and log them multiple times.
+    # 2. The email sending and logging should only happen once per user.
+    # 3. The SentEmailLog model may not have the fields as used (see lint errors).
+    
+    # Corrected version:
     for user in users:
         html = render_template(
             'email/offer_digest.html',
@@ -5548,42 +5620,26 @@ def admin_send_bulk_email():
         )
         try:
             mail.send(msg)
+            status = 'sent'
+            error_message = None
             print(f"Sent to {user.email}")
         except Exception as e:
+            status = 'failed'
+            error_message = str(e)
             print(f"Failed to send to {user.email}: {e}")
             flash(f"Failed to send to {user.email}: {e}", 'danger')
-        for user in users:
-            html = render_template(
-                'email/offer_digest.html',
-                user=user,
-                offers=offers
-            )
-            msg = Message(
-                subject=subject,
-                recipients=[user.email],
-                html=html,
-                sender=config.sender_email
-            )
-            try:
-                mail.send(msg)
-                status = 'sent'
-                error_message = None
-            except Exception as e:
-                status = 'failed'
-                error_message = str(e)
-                flash(f"Failed to send to {user.email}: {e}", 'danger')
-            # Log the email
-            log = SentEmailLog(
-                to_email=user.email,
-                subject=subject,
-                body=html,
-                offer_ids=json.dumps(offer_ids),
-                user_id=user.id,
-                status=status,
-                error_message=error_message
-            )
-            db.session.add(log)
-        db.session.commit()
+        # Log the email
+        log = SentEmailLog(
+            to_email=user.email,
+            subject=subject,
+            body=html,
+            offer_ids=json.dumps(offer_ids),
+            user_id=user.id,
+            status=status,
+            error_message=error_message
+        )
+        db.session.add(log)
+    db.session.commit()
     flash('Emails sent!', 'success')
     return redirect(url_for('admin_email_config'))
 

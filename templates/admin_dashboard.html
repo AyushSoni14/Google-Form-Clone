@@ -273,6 +273,67 @@
                 </div>
             </div>
         </div>
+           <div class="tab-pane fade" id="api-tools" role="tabpanel" aria-labelledby="api-tools-tab">
+            <h2>API Tester</h2>
+            <div class="card">
+                <div class="card-body">
+                    <form id="adminApiTestForm">
+                        <div class="mb-3">
+                            <label for="apiMethod" class="form-label">HTTP Method</label>
+                            <select class="form-select" id="apiMethod">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="DELETE">DELETE</option>
+                                <option value="PATCH">PATCH</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="apiUrl" class="form-label">API Endpoint URL</label>
+                            <input type="text" class="form-control" id="apiUrl" placeholder="e.g., {{ request.url_root }}api/stats">
+                        </div>
+                        <div class="mb-3">
+                            <label for="traking_url" class="form-label">Traking URL</label>
+                            <input type="text" class="form-control" id="traking_url" placeholder="e.g., {{ request.url_root }}api/stats">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Query Parameters</label>
+                            <div id="paramsList"></div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addParamRow()">+ Add Parameter</button>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Headers</label>
+                            <div id="headersList"></div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addHeaderRow()">+ Add Header</button>
+                        </div>
+                        <div class="mb-3" id="bodyGroup" style="display:none;">
+                            <label for="apiBody" class="form-label">Request Body (JSON)</label>
+                            <textarea class="form-control" id="apiBody" rows="4" placeholder="{\n  \"key\": \"value\"\n}"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Send Request</button>
+                    </form>
+                </div>
+                <div class="card-footer">
+                    <h5 class="card-title">Response</h5>
+                    <ul class="nav nav-tabs mb-2" id="adminApiTabs" role="tablist">
+                      <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="admin-pretty-tab" data-bs-toggle="tab" type="button" role="tab">Pretty</button>
+                      </li>
+                      <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="admin-raw-tab" data-bs-toggle="tab" type="button" role="tab">Raw</button>
+                      </li>
+                      <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="admin-table-tab" data-bs-toggle="tab" type="button" role="tab">Table View</button>
+                      </li>
+                    </ul>
+                    <div id="adminPrettyResult" style="display:block;"></div>
+                    <pre id="apiResponseOutput" class="bg-dark text-white p-3 rounded" style="display:none;">API response will be shown here...</pre>
+                    <div id="adminTableResult" style="display:none;"></div>
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+                </div>
+            </div>
+        </div>
     <div class="tab-pane fade" id="domain-cheker" role="tabpanel" aria-labelledby="domain-cheker-tab">
         <h2>Domain Checker</h2>
         <div class="card">
@@ -335,7 +396,134 @@
             </div>
         </div>
     </div>
-    <div class="tab-pane fade show active" id="All-Offers" role="tabpanel" aria-labelledby="All-Offers-tab">
+    <div class="tab-pane fade" id="All-Offers" role="tabpanel" aria-labelledby="All-Offers-tab">
+        <h2>All Offers from URL Tester</h2>
+        
+        <!-- Bulk Scheduling Form -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Bulk Offer Scheduling</h5>
+            </div>
+            <div class="card-body">
+                <form id="bulkOfferSchedulingForm">
+                    <div class="bulk-entry-list">
+                        <div class="bulk-entry-set row g-3 align-items-end mb-3">
+                            <div class="col-md-2">
+                                <label for="bulkOfferUrl" class="form-label">URL</label>
+                                <input type="url" class="form-control" id="bulkOfferUrl" placeholder="https://example.com">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="bulkOfferStartTime" class="form-label">Start Time</label>
+                                <input type="time" class="form-control" id="bulkOfferStartTime">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="bulkOfferEndTime" class="form-label">End Time</label>
+                                <input type="time" class="form-control" id="bulkOfferEndTime">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="bulkOfferStartDate" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="bulkOfferStartDate">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="bulkOfferEndDate" class="form-label">End Date</label>
+                                <input type="date" class="form-control" id="bulkOfferEndDate">
+                            </div>
+                            <div class="col-md-2 d-flex align-items-center">
+                                <button type="button" class="btn btn-primary w-100 me-2" id="applyBulkOfferBtn" disabled>
+                                    Apply to Selected
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm remove-bulk-entry" style="display: none;">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-secondary btn-sm" id="addMoreBulkEntries">
+                                <i class="fas fa-plus me-1"></i>Add More Entries
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="table-responsive">
+          <table class="table table-hover table-bordered align-middle" id="allOffersTable">
+            <thead class="table-primary">
+              <tr>
+                <th>
+                    <input type="checkbox" id="selectAllOffers" title="Select all offers">
+                </th>
+                <th>Row ID</th>
+                <th>Offer Name</th>
+                <th>Offer ID</th>
+                <th>Image</th>
+                <th>Target URL</th>
+                <th>Scheduling</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for offer in all_offers_from_url_tester %}
+              <tr class="offer-row" data-row-id="{{ offer.my_row_id }}">
+                <td>
+                    <input type="checkbox" class="offer-checkbox" value="{{ offer.my_row_id }}" 
+                           data-offer-name="{{ offer.offer_name }}"
+                           data-offer-id="{{ offer.offer_id }}">
+                </td>
+                <td>{{ offer.my_row_id }}</td>
+                <td>{{ offer.offer_name }}</td>
+                <td>{{ offer.offer_id }}</td>
+                <td>
+                  {% if offer.masked_image_url %}
+                    <img src="{{ offer.masked_image_url }}" alt="Offer Image" style="max-width: 80px; max-height: 50px; object-fit: contain;">
+                  {% else %}
+                    <span class="text-muted">No Image</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if offer.masked_target_url %}
+                    <a href="{{ offer.masked_target_url }}" target="_blank">{{ offer.masked_target_url }}</a>
+                  {% else %}
+                    <span class="text-muted">No URL</span>
+                  {% endif %}
+                </td>
+                <td>
+                    <button class="btn btn-outline-info btn-sm expand-scheduling-btn" 
+                            data-offer-id="{{ offer.my_row_id }}" 
+                            data-offer-name="{{ offer.offer_name }}">
+                        <i class="fas fa-clock me-1"></i>
+                        <span class="scheduling-count">0</span> Scheduled
+                    </button>
+                </td>
+              </tr>
+              <tr class="expandable-row" id="expandable-{{ offer.my_row_id }}" style="display:none;">
+                <td colspan="7">
+                  <div class="expandable-form-container">
+                    <form class="multi-entry-form">
+                      <div class="entry-list">
+                        <div class="entry-set row g-2 mb-2">
+                          <div class="col-md-2"><input type="url" class="form-control" name="url" placeholder="URL"></div>
+                          <div class="col-md-2"><input type="time" class="form-control" name="start_time" placeholder="Start Time"></div>
+                          <div class="col-md-2"><input type="time" class="form-control" name="end_time" placeholder="End Time"></div>
+                          <div class="col-md-2"><input type="date" class="form-control" name="start_date" placeholder="Start Date"></div>
+                          <div class="col-md-2"><input type="date" class="form-control" name="end_date" placeholder="End Date"></div>
+                          <div class="col-md-2 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-entry">Remove</button></div>
+                        </div>
+                      </div>
+                      <button type="button" class="btn btn-secondary btn-sm add-more">Add More</button>
+                      <button type="button" class="btn btn-success btn-sm save-scheduling" data-offer-id="{{ offer.my_row_id }}">Save Scheduling</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <!-- <div class="tab-pane fade show active" id="All-Offers" role="tabpanel" aria-labelledby="All-Offers-tab">
       <h2>All Offers from URL Tester</h2>
       <div class="card mb-3">
         <div class="card-body">
@@ -427,8 +615,10 @@
           </tbody>
         </table>
       </div>
+    </div> -->
+    
     </div>
-    </div>
+    
 </div>
 {% endblock %}
 
@@ -2316,6 +2506,7 @@ function renderProxyTestResultsTable(results) {
                     const image = r.image || defaultImage;
                     const countries = r.countries || [];
                     const payout = r.payout || 'N/A';
+                    const description = r.description || 'N/A';
                     const url = r.url || '';
                     const status = r.status || 'N/A';
                     const ip_country = r.ip_country || 'N/A';
@@ -2368,7 +2559,11 @@ function renderProxyTestResultsTable(results) {
         data-id="${id}" 
         data-name="${name}" 
         data-image="${image}" 
-        data-url="${url}">
+        data-url="${url}"
+        data-payout="${payout}"
+        data-countries="${countries}"
+        data-description="${description}"
+        >
 </td>
 
                             <td><span class="text-muted">${index + 1}</span></td>
@@ -2386,7 +2581,11 @@ function renderProxyTestResultsTable(results) {
         data-id="${id}" 
         data-name="${name}" 
         data-image="${image}" 
-        data-url="${url}">
+        data-url="${url}"
+        data-payout="${payout}"
+        data-countries="${countries}"
+        data-description="${description}"
+        >
         Add
     </button>
 </td>
@@ -2453,6 +2652,9 @@ if (e.target && e.target.classList.contains('add-offer-btn')) {
         offer_name: btn.getAttribute('data-name'),
         image_url: btn.getAttribute('data-image'),
         target_url: btn.getAttribute('data-url'),
+        payout: btn.getAttribute('data-payout'),
+        countries: btn.getAttribute('data-countries'),
+        description: btn.getAttribute('data-description')
     };
 
     fetch('/add_offer_to_table', {
@@ -2753,7 +2955,10 @@ if (!document.querySelector('#button-animations-style')) {
                 id: cb.getAttribute('data-id'),
                 name: cb.getAttribute('data-name'),
                 image: cb.getAttribute('data-image'),
-                url: cb.getAttribute('data-url')
+                url: cb.getAttribute('data-url'),
+                payout: cb.getAttribute('data-payout'),
+                countries: cb.getAttribute('data-countries'),
+                description: cb.getAttribute('data-description')
             });
         });
 
@@ -3059,6 +3264,551 @@ if (!document.querySelector('#button-animations-style')) {
   });
 });
 </script>
+<script>
+// Expand/collapse logic for All Offers table rows
+(function() {
+  const table = document.getElementById('allOffersTable');
+  if (!table) return;
+  
+  // Handle expand button clicks
+  table.addEventListener('click', function(e) {
+    if (e.target.closest('.expand-scheduling-btn')) {
+      const btn = e.target.closest('.expand-scheduling-btn');
+      const offerId = btn.getAttribute('data-offer-id');
+      const expandable = document.getElementById('expandable-' + offerId);
+      if (!expandable) return;
+      
+      // Hide all other expandable rows
+      document.querySelectorAll('.expandable-row').forEach(row => {
+        if (row !== expandable) row.style.display = 'none';
+      });
+      
+      // Toggle this one
+      const isHidden = window.getComputedStyle(expandable).display === 'none';
+      expandable.style.display = isHidden ? '' : 'none';
+      
+      // Load existing scheduling data when expanding
+      if (isHidden) {
+        loadExistingSchedulingData(offerId);
+      }
+    }
+  });
+  
+  // Function to load existing scheduling data
+  function loadExistingSchedulingData(offerId) {
+    fetch(`/admin/get_url_scheduling/${offerId}`)
+      .then(response => response.json())
+      .then(data => {
+        const expandable = document.getElementById('expandable-' + offerId);
+        const form = expandable.querySelector('.multi-entry-form');
+        const entryList = form.querySelector('.entry-list');
+        
+        // Clear existing entries
+        entryList.innerHTML = '';
+        
+        // Update the scheduling count in the button
+        const expandBtn = document.querySelector(`[data-offer-id="${offerId}"].expand-scheduling-btn`);
+        const countSpan = expandBtn ? expandBtn.querySelector('.scheduling-count') : null;
+        const schedulingCount = data.success ? data.scheduling_data.length : 0;
+        
+        if (countSpan) {
+          countSpan.textContent = schedulingCount;
+          // Update button appearance based on count
+          if (schedulingCount > 0) {
+            expandBtn.classList.remove('btn-outline-info');
+            expandBtn.classList.add('btn-info');
+          } else {
+            expandBtn.classList.remove('btn-info');
+            expandBtn.classList.add('btn-outline-info');
+          }
+        }
+        
+        if (data.success && data.scheduling_data.length > 0) {
+          // Add entries for each scheduling data
+          data.scheduling_data.forEach((schedule, index) => {
+            const entryHtml = `
+              <div class="entry-set row g-2 mb-2">
+                <div class="col-md-2"><input type="url" class="form-control" name="url" placeholder="URL" value="${schedule.url || ''}"></div>
+                <div class="col-md-2"><input type="time" class="form-control" name="start_time" placeholder="Start Time" value="${schedule.start_time || ''}"></div>
+                <div class="col-md-2"><input type="time" class="form-control" name="end_time" placeholder="End Time" value="${schedule.end_time || ''}"></div>
+                <div class="col-md-2"><input type="date" class="form-control" name="start_date" placeholder="Start Date" value="${schedule.start_date || ''}"></div>
+                <div class="col-md-2"><input type="date" class="form-control" name="end_date" placeholder="End Date" value="${schedule.end_date || ''}"></div>
+                <div class="col-md-2 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-entry">Remove</button></div>
+              </div>
+            `;
+            entryList.insertAdjacentHTML('beforeend', entryHtml);
+          });
+        } else {
+          // If no existing data, add one empty entry
+          const entryHtml = `
+            <div class="entry-set row g-2 mb-2">
+              <div class="col-md-2"><input type="url" class="form-control" name="url" placeholder="URL"></div>
+              <div class="col-md-2"><input type="time" class="form-control" name="start_time" placeholder="Start Time"></div>
+              <div class="col-md-2"><input type="time" class="form-control" name="end_time" placeholder="End Time"></div>
+              <div class="col-md-2"><input type="date" class="form-control" name="start_date" placeholder="Start Date"></div>
+              <div class="col-md-2"><input type="date" class="form-control" name="end_date" placeholder="End Date"></div>
+              <div class="col-md-2 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-entry">Remove</button></div>
+            </div>
+          `;
+          entryList.insertAdjacentHTML('beforeend', entryHtml);
+        }
+      })
+      .catch(error => {
+        console.error('Error loading scheduling data:', error);
+        // On error, add one empty entry
+        const expandable = document.getElementById('expandable-' + offerId);
+        const form = expandable.querySelector('.multi-entry-form');
+        const entryList = form.querySelector('.entry-list');
+        entryList.innerHTML = `
+          <div class="entry-set row g-2 mb-2">
+            <div class="col-md-2"><input type="url" class="form-control" name="url" placeholder="URL"></div>
+            <div class="col-md-2"><input type="time" class="form-control" name="start_time" placeholder="Start Time"></div>
+            <div class="col-md-2"><input type="time" class="form-control" name="end_time" placeholder="End Time"></div>
+            <div class="col-md-2"><input type="date" class="form-control" name="start_date" placeholder="Start Date"></div>
+            <div class="col-md-2"><input type="date" class="form-control" name="end_date" placeholder="End Date"></div>
+            <div class="col-md-2 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-entry">Remove</button></div>
+          </div>
+        `;
+      });
+  }
+
+  // Add/Remove entry logic
+  table.addEventListener('click', function(e) {
+    if (e.target.classList.contains('add-more')) {
+      const form = e.target.closest('form');
+      const entryList = form.querySelector('.entry-list');
+      let templateEntry = entryList.querySelector('.entry-set');
+      
+      // If no entries exist, create a new one from the original template
+      if (!templateEntry) {
+        templateEntry = document.createElement('div');
+        templateEntry.className = 'entry-set row g-2 mb-2';
+        templateEntry.innerHTML = `
+          <div class="col-md-2"><input type="url" class="form-control" name="url" placeholder="URL"></div>
+          <div class="col-md-2"><input type="time" class="form-control" name="start_time" placeholder="Start Time"></div>
+          <div class="col-md-2"><input type="time" class="form-control" name="end_time" placeholder="End Time"></div>
+          <div class="col-md-2"><input type="date" class="form-control" name="start_date" placeholder="Start Date"></div>
+          <div class="col-md-2"><input type="date" class="form-control" name="end_date" placeholder="End Date"></div>
+          <div class="col-md-2 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-entry">Remove</button></div>
+        `;
+      }
+      
+      const newEntry = templateEntry.cloneNode(true);
+      // Clear values
+      newEntry.querySelectorAll('input').forEach(inp => inp.value = '');
+      // Show remove button
+      newEntry.querySelector('.remove-entry').style.display = 'block';
+      entryList.appendChild(newEntry);
+    }
+    if (e.target.classList.contains('remove-entry')) {
+      const entry = e.target.closest('.entry-set');
+      entry.remove();
+    }
+    
+    // Save scheduling data
+    if (e.target.classList.contains('save-scheduling')) {
+      const offerId = e.target.getAttribute('data-offer-id');
+      const form = e.target.closest('.multi-entry-form');
+      const entrySets = form.querySelectorAll('.entry-set');
+      
+      const schedulingData = [];
+      entrySets.forEach(entrySet => {
+        const url = entrySet.querySelector('input[name="url"]').value;
+        const startTime = entrySet.querySelector('input[name="start_time"]').value;
+        const endTime = entrySet.querySelector('input[name="end_time"]').value;
+        const startDate = entrySet.querySelector('input[name="start_date"]').value;
+        const endDate = entrySet.querySelector('input[name="end_date"]').value;
+        
+        if (url || startTime || endTime || startDate || endDate) {
+          schedulingData.push({
+            url: url,
+            start_time: startTime,
+            end_time: endTime,
+            start_date: startDate,
+            end_date: endDate
+          });
+        }
+      });
+      
+      // Show loading state
+      const originalText = e.target.textContent;
+      e.target.textContent = 'Saving...';
+      e.target.disabled = true;
+      
+      fetch('/admin/save_url_scheduling', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          offer_id: offerId,
+          scheduling_data: schedulingData
+        })
+      })
+      .then(response => response.json())
+              .then(data => {
+          if (data.success) {
+            e.target.textContent = 'Saved!';
+            e.target.classList.remove('btn-success');
+            e.target.classList.add('btn-outline-success');
+            
+            // Update the scheduling count in the button
+            const expandBtn = document.querySelector(`[data-offer-id="${offerId}"].expand-scheduling-btn`);
+            const countSpan = expandBtn ? expandBtn.querySelector('.scheduling-count') : null;
+            if (countSpan) {
+              const newCount = schedulingData.length;
+              countSpan.textContent = newCount;
+              // Update button appearance based on count
+              if (newCount > 0) {
+                expandBtn.classList.remove('btn-outline-info');
+                expandBtn.classList.add('btn-info');
+              } else {
+                expandBtn.classList.remove('btn-info');
+                expandBtn.classList.add('btn-outline-info');
+              }
+            }
+            
+            setTimeout(() => {
+              e.target.textContent = originalText;
+              e.target.classList.remove('btn-outline-success');
+              e.target.classList.add('btn-success');
+              e.target.disabled = false;
+            }, 2000);
+          } else {
+            alert('Error saving: ' + (data.error || 'Unknown error'));
+            e.target.textContent = originalText;
+            e.target.disabled = false;
+          }
+        })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Network error while saving');
+        e.target.textContent = originalText;
+        e.target.disabled = false;
+      });
+    }
+  });
+  
+  // Load scheduling counts for all offers when page loads
+  function loadAllSchedulingCounts() {
+    const expandButtons = document.querySelectorAll('.expand-scheduling-btn');
+    expandButtons.forEach(btn => {
+      const offerId = btn.getAttribute('data-offer-id');
+      fetch(`/admin/get_url_scheduling/${offerId}`)
+        .then(response => response.json())
+        .then(data => {
+          const countSpan = btn.querySelector('.scheduling-count');
+          const schedulingCount = data.success ? data.scheduling_data.length : 0;
+          
+          if (countSpan) {
+            countSpan.textContent = schedulingCount;
+            // Update button appearance based on count
+            if (schedulingCount > 0) {
+              btn.classList.remove('btn-outline-info');
+              btn.classList.add('btn-info');
+            } else {
+              btn.classList.remove('btn-info');
+              btn.classList.add('btn-outline-info');
+            }
+          }
+        })
+        .catch(error => {
+          console.error('Error loading scheduling count for offer', offerId, error);
+        });
+    });
+  }
+  
+  // Load counts when page is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadAllSchedulingCounts);
+  } else {
+    loadAllSchedulingCounts();
+  }
+})();
+</script>
+
+<script>
+// Bulk Offer Scheduling Functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllOffers = document.getElementById('selectAllOffers');
+    const offerCheckboxes = document.querySelectorAll('.offer-checkbox');
+    const applyBulkOfferBtn = document.getElementById('applyBulkOfferBtn');
+    const addMoreBulkEntriesBtn = document.getElementById('addMoreBulkEntries');
+    const bulkEntryList = document.querySelector('.bulk-entry-list');
+
+    function updateBulkOfferBtnState() {
+        const anyChecked = Array.from(offerCheckboxes).some(cb => cb.checked);
+        const hasAnyUrl = Array.from(document.querySelectorAll('.bulk-entry-set input[type="url"]')).some(input => input.value.trim() !== '');
+        const shouldEnable = anyChecked && hasAnyUrl;
+        applyBulkOfferBtn.disabled = !shouldEnable;
+        console.log('Button state update:', { anyChecked, hasAnyUrl, shouldEnable, disabled: applyBulkOfferBtn.disabled });
+    }
+    
+    function updateRemoveButtonsVisibility() {
+        const entrySets = document.querySelectorAll('.bulk-entry-set');
+        const firstRemoveBtn = document.querySelector('.bulk-entry-set:first-child .remove-bulk-entry');
+        
+        if (entrySets.length > 1 && firstRemoveBtn) {
+            firstRemoveBtn.style.display = 'block';
+        } else if (firstRemoveBtn) {
+            firstRemoveBtn.style.display = 'none';
+        }
+    }
+
+    // Select All logic for offers
+    if (selectAllOffers) {
+        selectAllOffers.addEventListener('change', function() {
+            offerCheckboxes.forEach(cb => {
+                cb.checked = selectAllOffers.checked;
+            });
+            updateBulkOfferBtnState();
+        });
+    }
+
+    // Individual checkbox logic for offers
+    offerCheckboxes.forEach(cb => {
+        cb.addEventListener('change', function() {
+            // If any unchecked, uncheck selectAll; if all checked, check selectAll
+            const allChecked = Array.from(offerCheckboxes).every(cb => cb.checked);
+            if (selectAllOffers) {
+                selectAllOffers.checked = allChecked;
+            }
+            updateBulkOfferBtnState();
+        });
+    });
+
+    // Add More Entries functionality
+    if (addMoreBulkEntriesBtn) {
+        addMoreBulkEntriesBtn.addEventListener('click', function() {
+            const newEntrySet = document.createElement('div');
+            newEntrySet.className = 'bulk-entry-set row g-3 align-items-end mb-3';
+            newEntrySet.innerHTML = `
+                <div class="col-md-2">
+                    <label class="form-label">URL</label>
+                    <input type="url" class="form-control bulk-url-input" placeholder="https://example.com">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Start Time</label>
+                    <input type="time" class="form-control bulk-start-time-input">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">End Time</label>
+                    <input type="time" class="form-control bulk-end-time-input">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Start Date</label>
+                    <input type="date" class="form-control bulk-start-date-input">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">End Date</label>
+                    <input type="date" class="form-control bulk-end-date-input">
+                </div>
+                <div class="col-md-2 d-flex align-items-center">
+                    <button type="button" class="btn btn-danger btn-sm remove-bulk-entry">
+                        <i class="fas fa-trash me-1"></i>Remove
+                    </button>
+                </div>
+            `;
+            
+            bulkEntryList.appendChild(newEntrySet);
+            
+            // Add event listeners to new inputs
+            const newInputs = newEntrySet.querySelectorAll('input');
+            newInputs.forEach(input => {
+                input.addEventListener('input', updateBulkOfferBtnState);
+            });
+            
+            // Add remove functionality
+            const removeBtn = newEntrySet.querySelector('.remove-bulk-entry');
+            removeBtn.addEventListener('click', function() {
+                newEntrySet.remove();
+                updateBulkOfferBtnState();
+                updateRemoveButtonsVisibility();
+            });
+            
+            // Show remove button on first entry when we have multiple entries
+            updateRemoveButtonsVisibility();
+        });
+    }
+
+    // Add remove functionality to the first entry set
+    const firstEntrySet = document.querySelector('.bulk-entry-set');
+    if (firstEntrySet) {
+        const removeBtn = firstEntrySet.querySelector('.remove-bulk-entry');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function() {
+                firstEntrySet.remove();
+                updateBulkOfferBtnState();
+                updateRemoveButtonsVisibility();
+            });
+        }
+    }
+
+    // Input fields logic for bulk offer scheduling - use event delegation
+    document.addEventListener('input', function(e) {
+        if (e.target.matches('.bulk-entry-set input')) {
+            updateBulkOfferBtnState();
+        }
+    });
+
+    // Apply bulk offer scheduling
+    if (applyBulkOfferBtn) {
+        console.log('Apply button found, adding event listener');
+        applyBulkOfferBtn.addEventListener('click', function() {
+            console.log('Apply button clicked!');
+            const selectedOffers = Array.from(offerCheckboxes)
+                .filter(cb => cb.checked)
+                .map(cb => ({
+                    offer_id: cb.value, // This is my_row_id
+                    offer_name: cb.getAttribute('data-offer-name'),
+                    offer_id_value: cb.getAttribute('data-offer-id')
+                }));
+
+            if (selectedOffers.length === 0) {
+                alert('Please select at least one offer.');
+                return;
+            }
+            
+            console.log('Selected offers count:', selectedOffers.length);
+
+            // Collect all scheduling data from all entry sets
+            const entrySets = document.querySelectorAll('.bulk-entry-set');
+            const schedulingData = [];
+            
+            entrySets.forEach(entrySet => {
+                const url = entrySet.querySelector('input[type="url"]').value.trim();
+                const timeInputs = entrySet.querySelectorAll('input[type="time"]');
+                const dateInputs = entrySet.querySelectorAll('input[type="date"]');
+                
+                const startTime = timeInputs[0] ? timeInputs[0].value || null : null;
+                const endTime = timeInputs[1] ? timeInputs[1].value || null : null;
+                const startDate = dateInputs[0] ? dateInputs[0].value || null : null;
+                const endDate = dateInputs[1] ? dateInputs[1].value || null : null;
+                
+                if (url) {
+                    schedulingData.push({
+                        url: url,
+                        start_time: startTime,
+                        end_time: endTime,
+                        start_date: startDate,
+                        end_date: endDate
+                    });
+                }
+            });
+            
+            if (schedulingData.length === 0) {
+                alert('Please enter at least one URL.');
+                return;
+            }
+            
+            console.log('Scheduling data to be applied:', schedulingData);
+            console.log('Selected offers:', selectedOffers);
+
+            // Show loading state
+            const originalText = applyBulkOfferBtn.textContent;
+            applyBulkOfferBtn.textContent = 'Applying...';
+            applyBulkOfferBtn.disabled = true;
+
+            // Process each selected offer
+            let processedCount = 0;
+            let successCount = 0;
+            let errorCount = 0;
+
+            const processOffer = (offer) => {
+                return fetch('/admin/append_url_scheduling', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        offer_id: offer.offer_id,
+                        scheduling_data: schedulingData
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                        console.error(`Error saving offer ${offer.offer_id}:`, data.error);
+                    }
+                })
+                .catch(error => {
+                    errorCount++;
+                    console.error(`Network error for offer ${offer.offer_id}:`, error);
+                })
+                .finally(() => {
+                    processedCount++;
+                    
+                    // Check if all offers have been processed
+                    if (processedCount === selectedOffers.length) {
+                        // Show final result
+                        if (errorCount === 0) {
+                            // All successful
+                            applyBulkOfferBtn.textContent = 'Applied!';
+                            applyBulkOfferBtn.classList.remove('btn-primary');
+                            applyBulkOfferBtn.classList.add('btn-success');
+                            
+                            // Show success message
+                            const successAlert = document.createElement('div');
+                            successAlert.className = 'alert alert-success alert-dismissible fade show mt-3';
+                            successAlert.innerHTML = `
+                                <i class="fas fa-check-circle me-2"></i>
+                                Successfully applied scheduling to ${successCount} offer(s).
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            `;
+                            
+                            const form = document.getElementById('bulkOfferSchedulingForm');
+                            form.parentNode.insertBefore(successAlert, form.nextSibling);
+                        } else if (successCount === 0) {
+                            // All failed
+                            applyBulkOfferBtn.textContent = 'Failed!';
+                            applyBulkOfferBtn.classList.remove('btn-primary');
+                            applyBulkOfferBtn.classList.add('btn-danger');
+                            alert(`Failed to apply scheduling to any offers. ${errorCount} errors occurred.`);
+                        } else {
+                            // Partial success
+                            applyBulkOfferBtn.textContent = 'Partial!';
+                            applyBulkOfferBtn.classList.remove('btn-primary');
+                            applyBulkOfferBtn.classList.add('btn-warning');
+                            alert(`Applied scheduling to ${successCount} offers, but ${errorCount} failed.`);
+                        }
+                        
+                        // Reset form after 3 seconds
+                        setTimeout(() => {
+                            applyBulkOfferBtn.textContent = originalText;
+                            applyBulkOfferBtn.classList.remove('btn-success', 'btn-danger', 'btn-warning');
+                            applyBulkOfferBtn.classList.add('btn-primary');
+                            applyBulkOfferBtn.disabled = false;
+                            
+                            // Clear form - remove all entry sets except the first one
+                            const entrySets = document.querySelectorAll('.bulk-entry-set');
+                            entrySets.forEach((entrySet, index) => {
+                                if (index === 0) {
+                                    // Clear the first entry set
+                                    entrySet.querySelectorAll('input').forEach(input => input.value = '');
+                                } else {
+                                    // Remove additional entry sets
+                                    entrySet.remove();
+                                }
+                            });
+                            
+                            // Uncheck all checkboxes
+                            offerCheckboxes.forEach(cb => cb.checked = false);
+                            if (selectAllOffers) selectAllOffers.checked = false;
+                            
+                            updateBulkOfferBtnState();
+                        }, 3000);
+                    }
+                });
+            };
+
+            // Process all selected offers
+            selectedOffers.forEach(processOffer);
+        });
+    }
+
+    // Initial state
+    updateBulkOfferBtnState();
+});
+</script>
 {% endblock %} 
 
 
@@ -3117,5 +3867,7 @@ if (!document.querySelector('#button-animations-style')) {
     </form>
   </div>
 </div>
+
+
 
 
