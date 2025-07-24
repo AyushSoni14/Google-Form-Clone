@@ -42,44 +42,44 @@ document.getElementById('selectAllOffers').addEventListener('change', function()
   });
 
 
-// Wait for DOM to be ready
-document.addEventListener('DOMContentLoaded', function() {
-    const selectAll = document.getElementById('selectAllOffers');
-    const checkboxes = document.querySelectorAll('.offer-checkbox');
-    const applyBtn = document.getElementById('applyBulkBtn');
-    const urlInput = document.getElementById('bulkUrl');
-    const fromInput = document.getElementById('bulkFrom');
-    const toInput = document.getElementById('bulkTo');
+// // Wait for DOM to be ready
+// document.addEventListener('DOMContentLoaded', function() {
+//     const selectAll = document.getElementById('selectAllOffers');
+//     const checkboxes = document.querySelectorAll('.offer-checkbox');
+//     const applyBtn = document.getElementById('applyBulkBtn');
+//     const urlInput = document.getElementById('bulkUrl');
+//     const fromInput = document.getElementById('bulkFrom');
+//     const toInput = document.getElementById('bulkTo');
   
-    function updateApplyBtnState() {
-      // Enable if at least one offer is checked and all inputs are filled
-      const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
-      const allInputsFilled = urlInput.value && fromInput.value && toInput.value;
-      applyBtn.disabled = !(anyChecked && allInputsFilled);
-    }
+//     function updateApplyBtnState() {
+//       // Enable if at least one offer is checked and all inputs are filled
+//       const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+//       const allInputsFilled = urlInput.value && fromInput.value && toInput.value;
+//       applyBtn.disabled = !(anyChecked && allInputsFilled);
+//     }
   
-    // Select All logic
-    selectAll.addEventListener('change', function() {
-      checkboxes.forEach(cb => cb.checked = selectAll.checked);
-      updateApplyBtnState();
-    });
+//     // Select All logic
+//     selectAll.addEventListener('change', function() {
+//       checkboxes.forEach(cb => cb.checked = selectAll.checked);
+//       updateApplyBtnState();
+//     });
   
-    // Individual checkbox logic
-    checkboxes.forEach(cb => {
-      cb.addEventListener('change', function() {
-        // If any unchecked, uncheck selectAll; if all checked, check selectAll
-        selectAll.checked = Array.from(checkboxes).every(cb => cb.checked);
-        updateApplyBtnState();
-      });
-    });
+//     // Individual checkbox logic
+//     checkboxes.forEach(cb => {
+//       cb.addEventListener('change', function() {
+//         // If any unchecked, uncheck selectAll; if all checked, check selectAll
+//         selectAll.checked = Array.from(checkboxes).every(cb => cb.checked);
+//         updateApplyBtnState();
+//       });
+//     });
   
-    // Input fields logic
-    [urlInput, fromInput, toInput].forEach(input => {
-      input.addEventListener('input', updateApplyBtnState);
-    });
+//     // Input fields logic
+//     [urlInput, fromInput, toInput].forEach(input => {
+//       input.addEventListener('input', updateApplyBtnState);
+//     });
   
-    // Initial state
-    updateApplyBtnState();
+//     // Initial state
+//     updateApplyBtnState();
   
-    // (Functionality for submit can be added here, but you said to focus on UI for now)
-  });
+//     // (Functionality for submit can be added here, but you said to focus on UI for now)
+//   });

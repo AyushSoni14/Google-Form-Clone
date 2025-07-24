@@ -12,6 +12,7 @@
                 </div>
                 <div class="card-body p-4">
                     <!-- General Info -->
+                     <form id="createFormForm" method="POST" action="{{ url_for('create_form') }}" class="needs-validation" novalidate>
                     <h5 class="mb-3 text-primary"><i class="bi bi-info-circle me-1"></i>General Information</h5>
                     <div class="mb-3">
                         <label for="title" class="form-label">Form Title</label>
@@ -111,7 +112,7 @@
                             {% endfor %}
                         </select>
                     </div>
-
+                    
                     <div class="mb-3">
                         <label for="redirect_links" class="form-label">External Redirect Links (one per line)</label>
                         <textarea class="form-control" id="redirect_links" name="redirect_links" rows="3" placeholder="https://example1.com&#10;https://example2.com"></textarea>
@@ -119,10 +120,13 @@
                     </div>
 
                     <div class="d-flex justify-content-end mt-4">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-lg btn-secondary me-2">
+                            <i class="bi bi-arrow-left me-2"></i>Back to Forms</a>
                         <button type="submit" class="btn btn-lg btn-success px-4">
                             <i class="bi bi-plus-circle me-2"></i>Create Form
                         </button>
                     </div>
+                    </form>
                 </div>
             </div>
         </div>
