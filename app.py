@@ -4268,7 +4268,7 @@ def chat():
             'error': 'An error occurred while processing your message'
         })
 
-@app.route('/send_to_surveytitans', methods=['POST'])
+@app.route('/send_to_surveytitans', methods=['POST','GET'])
 def send_to_surveytitans():
     print("here1")
     try:
@@ -4326,7 +4326,8 @@ def merge_form(form_id):
         return redirect(request.referrer)
 
     # Extract oliver_form_id from URL using regex
-    match = re.search(r'/surveys/(\d+)', merge_url)
+    # match = re.search(r'/surveys/(\d+)', merge_url)
+    match = re.search(r'https?://[^/]+/surveys/(\d+)', merge_url)
     if not match:
         flash("Invalid merge URL format. Could not extract form ID.", "danger")
         return redirect(request.referrer)
@@ -4594,11 +4595,6 @@ def proxy_postback():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 from flask import request, render_template
-
-
-
-
-
 @app.route('/admin/response/<int:response_id>')
 @login_required
 @admin_required
