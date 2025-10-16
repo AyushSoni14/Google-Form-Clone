@@ -23,6 +23,8 @@ from functools import wraps
 import json
 import networkx as nx
 from networkx.readwrite import json_graph
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
@@ -127,29 +129,7 @@ def post_forms_to_make_webhook():
         return False
 
 
-#this function is to send te data for offers we fetched from apis
-# def post_offers_to_make_webhook():
-#     webhook_url = "https://hook.us2.make.com/b1uzgg2pnl41mdy2od45ut239ahwcfht"
-#     offers = Offer.query.order_by(Offer.created_at.desc()).limit(20).all()
-#     offers_data = [{
-#         "name": o.name,
-#         "description": o.description,
-#         "payout": o.payout,
-#         "countries": o.countries,
-#         "image": o.image,
-#         "url": o.url
-#     } for o in offers]
 
-#     # You can send all offers as a list, or send one at a time in a loop
-#     payload = {"offers": offers_data}
-
-#     try:
-#         response = requests.post(webhook_url, json=payload)
-#         print(f"Webhook response: {response.status_code} - {response.text}")
-#         return response.status_code == 200
-#     except Exception as e:
-#         print(f"Failed to post to Make webhook: {e}")
-#         return False
 
 def post_forms_to_make_webhook():
     webhook_url = "https://hook.us2.make.com/b1uzgg2pnl41mdy2od45ut239ahwcfht"
@@ -201,13 +181,19 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 app.config['SECRET_KEY'] = os.urandom(24)
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
+
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-app.config['SQLALCHEMY_DATABASE_URI'] = (
-    "mysql+pymysql://himanshu:Ayushsoni14@pepperads.mysql.database.azure.com/pepeleads"
-    f"?ssl_ca={os.path.join(basedir, 'certs', 'DigiCertGlobalRootCA.crt.pem')}"
-)
+# Use local SQLite
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'forms.db')
+
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forms.db'
+# basedir = os.path.abspath(os.path.dirname(__file__))
+
+# app.config['SQLALCHEMY_DATABASE_URI'] = (
+#     "mysql+pymysql://himanshu:Ayushsoni14@pepperads.mysql.database.azure.com/pepeleads"
+#     f"?ssl_ca={os.path.join(basedir, 'certs', 'DigiCertGlobalRootCA.crt.pem')}"
+# )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -312,32 +298,6 @@ def send_offer_cards_to_all_users():
                 print(f"Failed to send offers to {user.email}: {e}")
 
 
-# def send_daily_form_reports():
-#     with app.app_context():
-#         users = User.query.all()
-#         for user in users:
-#             forms = Form.query.filter_by(user_id=user.id).all()
-#             form_stats = []
-#             for form in forms:
-#                 response_count = Response.query.filter_by(form_id=form.id).count()
-#                 form_stats.append({
-#                     'title': form.title,
-#                     'created_at': form.created_at,
-#                     'response_count': response_count
-#                 })
-#             if not forms:
-#                 continue  # Skip users with no forms
-#             html = render_template('email/offer_digest.html', user=user, form_stats=form_stats)
-#             msg = Message(
-#                 subject="Your Daily Form Report",
-#                 recipients=[user.email],
-#                 html=html,
-#                 sender=app.config['MAIL_USERNAME']
-#             )
-#             try:
-#                 mail.send(msg)
-#             except Exception as e:
-#                 print(f"Failed to send report to {user.email}: {e}")
 
 
 
@@ -1076,23 +1036,7 @@ def create_form():
                 except Exception:
                     form.offer_date = None
         
-        # Add questions to form
-        # for i, q in enumerate(questions):
-        #     question = Question(
-        #         form_id=form.id,
-        #         question_text=q['text'],
-        #         question_type=q['type'],
-        #         required=q['required'],
-        #         order=i
-        #     )
-        #     if 'options' in q:
-        #         question.set_options(q['options'])
-        #     db.session.add(question)
-        
-        # db.session.commit()
-        
-        # # Clear referral from session after form creation
-        # session.pop('referral_company_id', None)
+
         
         flash('Form generated successfully!')
         return redirect(url_for('edit_form', form_id=form.id))
@@ -2527,7 +2471,7 @@ def initialize_templates():
                 'title': 'Contact Information',
                 'description': 'Collect contact information from your customers or clients',
                 'category': 'contact',
-                'preview_image': 'https://ssl.gstatic.com/docs/templates/thumbnails/10erh7nUxj1plOplVrZuDLCTQn0VYdVrFiWMsImLrDE0_400.png',
+                'preview_image': 'https://gwosevo.com/core/uploads/2024/07/Understanding-Customer-Data.png',
                 'questions': [
                     {
                         'question_text': 'Full Name',
@@ -4061,8 +4005,8 @@ def create_mindmap_visualization(mindmap_data):
         # Convert to base64
         img_str = base64.b64encode(buf.read()).decode()
         plt.close()
-        
-        return f'<img src="data:image/png;base64,{img_str}" class="img-fluid" alt="Mind Map">'
+        return img_str 
+        # return f'<img src="data:image/png;base64,{img_str}" class="img-fluid" alt="Mind Map">'
     except Exception as e:
         app.logger.error(f"Error creating mind map visualization: {str(e)}")
         return None
@@ -4151,7 +4095,7 @@ def create_form_ai():
 
         # Generate form preview
         form_preview = generate_form_from_mindmap(mindmap_data)
-
+        # print("mindmap_image=",mindmap_image)
         return render_template('create_form_ai.html',
                              mindmap_data=mindmap_data,
                              mindmap_image=mindmap_image,
@@ -4159,61 +4103,6 @@ def create_form_ai():
 
     return render_template('create_form_ai.html')
 
-@app.route('/create-form-from-ai', methods=['POST'])
-@login_required
-def create_form_from_ai():
-    """Create a form from the AI-generated mind map data."""
-    try:
-        # Get the mind map data from the session
-        mindmap_data = session.get('mindmap_data')
-        
-        if not mindmap_data:
-            flash('No form data found. Please generate a form first.', 'error')
-            return redirect(url_for('create_form_ai'))
-        score = session.get('score', 100)
-        form = Form(
-            title=mindmap_data['title'],
-            description=mindmap_data['description'],
-            user_id=current_user.id,
-            created_at=datetime.utcnow(),
-            score=int(score) 
-        )
-        db.session.add(form)
-        db.session.commit()
-
-        # Add questions from each section
-        order = 1
-        for section in mindmap_data['sections']:
-            for question_data in section['questions']:
-                question = Question(
-                    form_id=form.id,
-                    question_text=question_data['text'],
-                    question_type=question_data['type'],
-                    required=question_data.get('required', False),
-                    order=order
-                )
-                
-                # Handle options for multiple choice and checkbox questions
-                if question_data['type'] in ['multiple_choice', 'checkbox'] and 'options' in question_data:
-                    question.set_options(question_data['options'])
-                
-                db.session.add(question)
-                order += 1
-
-        # Commit all changes
-        db.session.commit()
-
-        # Clear the mind map data from session
-        session.pop('mindmap_data', None)
-
-        flash('Form created successfully!', 'success')
-        return redirect(url_for('dashboard'))
-
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error creating form from AI: {str(e)}")
-        flash('An error occurred while creating the form. Please try again.', 'error')
-        return redirect(url_for('create_form_ai'))
 
 @app.route('/chat', methods=['POST'])
 @login_required
